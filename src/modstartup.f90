@@ -428,7 +428,7 @@ contains
   !-----------------------------------------------------------------|
 
     use modsurfdata,only : wtsurf,wqsurf,ustin,thls,isurf,ps,lhetero
-    use modglobal, only : itot,jtot, ysize,xsize,dtmax,runtime, startfile,lwarmstart,eps1, imax,jmax
+    use modglobal, only : itot,jtot, ysize,xsize,dtmax,runtime, startfile,lwarmstart,lcoriol,lpressgrad,eps1, imax,jmax
     use modmpi,    only : myid,nprocx,nprocy,mpierr, MPI_FINALIZE
     use modtimedep, only : ltimedep
 
@@ -474,7 +474,7 @@ contains
     if (lwarmstart) then
       if (startfile == '') stop 'no restartfile set'
     end if
-  !isurf
+    !isurf
     if (myid == 0) then
       select case (isurf)
       case(1)
@@ -498,6 +498,11 @@ contains
       'WARNING: You selected to use time dependent (ltimedep) and heterogeneous surface conditions (lhetero) at the same time'
     endif
 
+    ! SvdL, 20241110: new lpressgrad intended for pressure-driven channel flow, not to be used i.c.w. Coriolis force
+    if (lcoriol .and. lpressgrad) then
+      if (myid==0) stop "Coriolis force (lcoriol) and channel-like pressure gradient (lpressgrad) are mutually exclusive. To use Coriolis force with NO pressure gradient, set geowinds to zero."
+    end if
+
   end subroutine checkinitvalues
 
   subroutine readinitfiles
@@ -513,7 +518,8 @@ contains
                                   zf,dzf,dzh,rv,rd,cp,rlv,pref0,om23_gs,&
                                   ijtot,cu,cv,e12min,dzh,cexpnr,ifinput,lwarmstart,ltotruntime,itrestart,&
                                   trestart, ladaptive,llsadv,tnextrestart,longint,lconstexner,lopenbc, linithetero, &
-                                  lstart_netcdf
+                                  lstart_netcdf, &
+                                  lcoriol, lpressgrad
     use modsubgrid,        only : ekm,ekh
     use modsurfdata,       only : wsvsurf, &
                                   thls,tskin,tskinm,tsoil,tsoilm,phiw,phiwm,Wl,Wlm,thvs,qts,isurf,svs,obl,oblav,&
@@ -524,7 +530,6 @@ contains
     use modmpi,            only : slabsum,myid,comm3d,mpierr,D_MPI_BCAST
     use modthermodynamics, only : thermodynamics,calc_halflev
     use moduser,           only : initsurf_user
-
     use modtestbed,        only : ltestbed,tb_ps,tb_thl,tb_qt,tb_u,tb_v,tb_w,tb_ug,tb_vg,&
                                   tb_dqtdxls,tb_dqtdyls,tb_qtadv,tb_thladv
     use modopenboundary,   only : openboundary_ghost,openboundary_readboundary,openboundary_initfields
@@ -587,10 +592,10 @@ contains
 
           ps         = tb_ps(1)
 
-        else if (lstart_netcdf) then
+        else if (lstart_netcdf) then ! SvdL, 20241110: added reading in of dpdxl and dpdyl, defaults to zero if not present in netcdf file
           call init_from_netcdf('init.'//cexpnr//'.nc', height, uprof, vprof, &
-                                thlprof, qtprof, e12prof, ug, vg, wfls, & 
-                                dqtdxls, dqtdyls, dqtdtls, thlpcar, kmax)
+                                thlprof, qtprof, e12prof, ug, vg, dpdxl, dpdyl, wfls, & 
+                                dqtdxls, dqtdyls, dqtdtls, thlpcar, kmax) 
           call tracer_profs_from_netcdf('tracers.'//cexpnr//'.nc', & 
                                         tracer_prop, nsv, svprof(1:kmax,:))
         else
@@ -960,7 +965,6 @@ contains
 !    2.1 read and initialise fields
 !-----------------------------------------------------------------
 
-
     if(myid==0)then
 
       if (ltestbed) then
@@ -978,18 +982,19 @@ contains
             thlpcar(k) = tb_thladv(1,k)
           end do
 
+      else if (lstart_netcdf) then 
+        continue! Profiles have been read by init_from_netcdf
       else
+        open (ifinput,file='lscale.inp.'//cexpnr, status='old',iostat=ierr)
+        if (ierr /= 0) then
+            write(6,*) 'Cannot open the file ', 'lscale.inp.'//cexpnr
+            STOP
+        end if
+        read (ifinput,'(a80)') chmess
+        read (ifinput,'(a80)') chmess
 
-        if (lstart_netcdf) then
-          continue ! Profiles have been read by init_from_netcdf
-        else
-          open (ifinput,file='lscale.inp.'//cexpnr, status='old',iostat=ierr)
-          if (ierr /= 0) then
-             write(6,*) 'Cannot open the file ', 'lscale.inp.'//cexpnr
-             STOP
-          end if
-          read (ifinput,'(a80)') chmess
-          read (ifinput,'(a80)') chmess
+        ! SvdL, 20241110: if lcoriol, read in 2nd and 3rd column as ug and vg
+        if (lcoriol) then
           do  k=1,kmax
             read (ifinput,*) &
                 height (k), &
@@ -1001,25 +1006,52 @@ contains
                 dqtdtls(k), &
                 thlpcar(k)
           end do
-          close(ifinput)
+        else ! else read in same columns as pressure gradients dpdx and dpdy (chosen for this approach as these columns anyway MUST exist in lscale.inp.xxx)
+          do  k=1,kmax
+            read (ifinput,*) &
+                height (k), &
+                dpdxl  (k), &
+                dpdyl  (k), &
+                wfls   (k), &
+                dqtdxls(k), &
+                dqtdyls(k), &
+                dqtdtls(k), &
+                thlpcar(k)
+          end do
         end if
 
+        close(ifinput)
       end if
 
-      write(6,*) ' height u_geo   v_geo    subs     ' &
-                ,'   dqtdx      dqtdy        dqtdtls     thl_rad '
-      do k=kmax,1,-1
-        write (6,'(3f7.1,5e12.4)') &
-              zf     (k), &
-              ug     (k), &
-              vg     (k), &
-              wfls   (k), &
-              dqtdxls(k), &
-              dqtdyls(k), &
-              dqtdtls(k), &
-              thlpcar(k)
-      end do
-
+      if (.not. lpressgrad) then
+        write(6,*) ' height u_geo   v_geo    subs     ' &
+                  ,'   dqtdx      dqtdy        dqtdtls     thl_rad '
+        do k=kmax,1,-1
+          write (6,'(3f7.1,5e12.4)') &
+                zf     (k), &
+                ug     (k), &
+                vg     (k), &
+                wfls   (k), &
+                dqtdxls(k), &
+                dqtdyls(k), &
+                dqtdtls(k), &
+                thlpcar(k)
+        end do
+      else   
+        write(6,*) ' height dpdxl   dpdyl    subs     ' &
+                  ,'   dqtdx      dqtdy        dqtdtls     thl_rad '
+        do k=kmax,1,-1
+          write (6,'(3f7.1,5e12.4)') &
+                zf     (k), &
+                dpdxl  (k), &
+                dpdyl  (k), &
+                wfls   (k), &
+                dqtdxls(k), &
+                dqtdyls(k), &
+                dqtdtls(k), &
+                thlpcar(k)
+        end do
+      end if 
 
     end if ! end myid==0
 
@@ -1039,10 +1071,12 @@ contains
 
     !******include rho if rho = rho(z) /= 1.0 ***********
 
-    do k = 1, kmax
-      dpdxl(k) =  om23_gs*vg(k)
-      dpdyl(k) = -om23_gs*ug(k)
-    end do
+    if (lcoriol) then ! only when Coriolis is enabled, calculte pressure gradients via geostrophic wind speeds (otherwise assume they have been set already)
+      do k = 1, kmax
+        dpdxl(k) =  om23_gs*vg(k)
+        dpdyl(k) = -om23_gs*ug(k)
+      end do
+    end if
 
     !-----------------------------------------------------------------
     !    2.5 make large-scale horizontal gradients
@@ -1773,7 +1807,7 @@ contains
   !! \note Tracers are read from tracers.XXX.nc, not here.
   !! \todo Make DEPHY-compatible.
   subroutine init_from_netcdf(filename, height, uprof, vprof, thlprof, qtprof, &
-                              e12prof, ug, vg, wfls, dqtdxls, dqtdyls, &
+                              e12prof, ug, vg, dpdxl, dpdyl, wfls, dqtdxls, dqtdyls, &
                               dqtdtls, dthlrad, kmax) 
     character(*),   intent(in)  :: filename
     real(field_r),  intent(out) :: height(:)
@@ -1784,6 +1818,8 @@ contains
     real(field_r),  intent(out) :: e12prof(:)
     real(field_r),  intent(out) :: ug(:)
     real(field_r),  intent(out) :: vg(:)
+    real(field_r),  intent(out) :: dpdxl(:)
+    real(field_r),  intent(out) :: dpdyl(:)
     real(field_r),  intent(out) :: wfls(:)
     real(field_r),  intent(out) :: dqtdxls(:)
     real(field_r),  intent(out) :: dqtdyls(:)
@@ -1812,6 +1848,10 @@ contains
     call read_nc_field(ncid, "ug", ug, start=1, count=kmax, &
                        fillvalue=0._field_r)
     call read_nc_field(ncid, "vg", vg, start=1, count=kmax, &
+                       fillvalue=0._field_r)
+    call read_nc_field(ncid, "dpdx", dpdxl, start=1, count=kmax, &
+                       fillvalue=0._field_r)
+    call read_nc_field(ncid, "dpdy", dpdyl, start=1, count=kmax, &
                        fillvalue=0._field_r)
     call read_nc_field(ncid, "wa", wfls, start=1, count=kmax, &
                        fillvalue=0._field_r)

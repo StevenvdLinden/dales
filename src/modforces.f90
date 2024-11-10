@@ -63,7 +63,7 @@ contains
 !                                                                 |
 !-----------------------------------------------------------------|
 
-  use modglobal, only : kmax,dzh,dzf,grav, lpressgrad
+  use modglobal, only : kmax,dzh,dzf,grav, lpressgrad, lcoriol
   use modfields, only : sv0,up,vp,wp,thv0h,dpdxl,dpdyl,thvh
   use moduser,   only : force_user
   use modmicrodata, only : imicro, imicro_bulk, imicro_bin, imicro_sice, imicro_sice2, iqr
@@ -75,14 +75,15 @@ contains
 
   if (lforce_user) call force_user
 
-  if (lpressgrad) then
-     !$acc kernels default(present) async(1)
-     do k = 1, kmax
-        up(:,:,k) = up(:,:,k) - dpdxl(k)      !RN LS pressure gradient force in x,y directions;
-        vp(:,:,k) = vp(:,:,k) - dpdyl(k)
-     end do
-     !$acc end kernels
-  end if
+  ! SvdL, 20241110: either apply pressure gradient calculated from geostrophic wind speeds (lcoriol) or imposed pressure gradient (lpressgrad)
+  if (lcoriol .or. lpressgrad) then
+    !$acc kernels default(present) async(1)
+    do k = 1, kmax
+      up(:,:,k) = up(:,:,k) - dpdxl(k)      !RN LS pressure gradient force in x,y directions;
+      vp(:,:,k) = vp(:,:,k) - dpdyl(k)
+    end do
+    !$acc end kernels
+  end if 
 
   if((imicro==imicro_sice).or.(imicro==imicro_sice2).or.(imicro==imicro_bulk).or.(imicro==imicro_bin)) then
     !$acc kernels default(present) async(2)

@@ -56,6 +56,8 @@ save
   real, allocatable     :: timels  (:)
   real, allocatable     :: ugt     (:,:)
   real, allocatable     :: vgt     (:,:)
+  real, allocatable     :: dpdxlt  (:,:)
+  real, allocatable     :: dpdylt  (:,:)
   real, allocatable     :: wflst   (:,:)
   real, allocatable     :: dqtdxlst(:,:)
   real, allocatable     :: dqtdylst(:,:)
@@ -67,13 +69,11 @@ save
   real, allocatable     :: thlproft(:,:)
   real, allocatable     :: qtproft (:,:)
 
-
-
 contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine inittimedep
     use modmpi,    only :myid,mpierr,comm3d,D_MPI_BCAST
-    use modglobal, only :cexpnr,k1,kmax,ifinput,runtime,zf,ntimedep
+    use modglobal, only :cexpnr,k1,kmax,ifinput,runtime,zf,ntimedep,lcoriol,lpressgrad
     use modsurfdata,only :ps,qts,wqsurf,wtsurf,thls, Qnetav
     use modtimedepsv, only : inittimedepsv
 
@@ -112,6 +112,8 @@ contains
     allocate(timels   (0:kls))
     allocate(ugt      (k1,kls))
     allocate(vgt      (k1,kls))
+    allocate(dpdxlt   (k1,kls))
+    allocate(dpdylt   (k1,kls))
     allocate(wflst    (k1,kls))
 
     allocate(dqtdxlst (k1,kls))
@@ -139,6 +141,8 @@ contains
 
     ugt      = 0
     vgt      = 0
+    dpdxlt   = 0
+    dpdylt   = 0
     wflst    = 0
 
     dqtdxlst = 0
@@ -245,6 +249,8 @@ contains
               stop 'STOP: No time dependend data for end of run'
             end if
           end do
+
+
           if (ltimedepuv) then
              ! new, optional format with u,v in ls_flux.inp.*
              do k=1,kmax
@@ -261,25 +267,41 @@ contains
                      dvdtlst (k,t)
              end do
           else
-             ! old format without u,v in ls_flux.inp.*  (default)
-             do k=1,kmax
+            ! SvdL, 20241110: if lcoriol, read in 2nd and 3rd column as ug and vg
+            if (lcoriol) then
+              ! old format without u,v in ls_flux.inp.*  (default)
+              do k=1,kmax
                 read (ifinput,*) &
-                     height  (k)  , &
-                     ugt     (k,t), &
-                     vgt     (k,t), &
-                     wflst   (k,t), &
-                     dqtdxlst(k,t), &
-                     dqtdylst(k,t), &
-                     dqtdtlst(k,t), &
-                     thlpcart(k,t)
-             end do
+                      height  (k)  , &
+                      ugt     (k,t), &
+                      vgt     (k,t), &
+                      wflst   (k,t), &
+                      dqtdxlst(k,t), &
+                      dqtdylst(k,t), &
+                      dqtdtlst(k,t), &
+                      thlpcart(k,t)
+              end do
+            else ! else read in same columns as pressure gradients dpdx and dpdy (chosen for this approach as these columns anyway MUST exist in ls_flux.inp.xxx)
+                do k=1,kmax
+                  read (ifinput,*) &
+                        height  (k)  , &
+                        dpdxlt  (k,t), &
+                        dpdylt  (k,t), &
+                        wflst   (k,t), &
+                        dqtdxlst(k,t), &
+                        dqtdylst(k,t), &
+                        dqtdtlst(k,t), &
+                        thlpcart(k,t)
+                end do
+            end if
+
+            
           end if
-       end do
+        end do
 
         close(ifinput)
 
       end if   !ltestbed
-
 
 !      do k=kmax,1,-1
 !        write (6,'(3f7.1,5e12.4)') &
@@ -292,7 +314,6 @@ contains
 !            dqtdtlst(k,t), &
 !            thlpcart(k,t)
 !      end do
-
 
       if(timeflux(1)>runtime) then
         write(6,*) 'Time dependent surface variables do not change before end of'
@@ -320,6 +341,8 @@ contains
     call D_MPI_BCAST(timels(1:kls)    ,kls     ,0,comm3d,mpierr)
     call D_MPI_BCAST(ugt              ,kmax*kls,0,comm3d,mpierr)
     call D_MPI_BCAST(vgt              ,kmax*kls,0,comm3d,mpierr)
+    call D_MPI_BCAST(dpdxlt           ,kmax*kls,0,comm3d,mpierr) ! SvdL, 20241111: broadcast time dependent pressure gradients..
+    call D_MPI_BCAST(dpdylt           ,kmax*kls,0,comm3d,mpierr)
     call D_MPI_BCAST(wflst            ,kmax*kls,0,comm3d,mpierr)
     call D_MPI_BCAST(dqtdxlst,kmax*kls ,0,comm3d,mpierr)
     call D_MPI_BCAST(dqtdylst,kmax*kls ,0,comm3d,mpierr)
@@ -381,7 +404,7 @@ contains
                             dvdtls,dvdxls,dvdyls, &
                             dpdxl,dpdyl
 
-    use modglobal,   only : rtimee,om23_gs,dzf,dzh,k1,kmax,llsadv
+    use modglobal,   only : rtimee,om23_gs,dzf,dzh,k1,kmax,llsadv,lcoriol,lpressgrad
 
     use modmpi,      only : myid
 
@@ -412,11 +435,15 @@ contains
     dvdtls   = dvdtlst  (:,t) + fac * ( dvdtlst  (:,t+1) - dvdtlst  (:,t) )
     thlpcar  = thlpcart (:,t) + fac * ( thlpcart (:,t+1) - thlpcart (:,t) )
 
-
-    do k=1,kmax
-      dpdxl(k) =  om23_gs*vg(k)
-      dpdyl(k) = -om23_gs*ug(k)
-    end do
+    if (lcoriol) then
+      do k=1,kmax
+        dpdxl(k) =  om23_gs*vg(k)
+        dpdyl(k) = -om23_gs*ug(k)
+      end do
+    else ! if not lcoriol, update regular pressure gradients 
+      dpdxl      = dpdxlt (:,t) + fac * ( dpdxlt (:,t+1) - dpdxlt (:,t) )   
+      dpdyl      = dpdylt (:,t) + fac * ( dpdylt (:,t+1) - dpdylt (:,t) )
+    end if
 
     whls(1)  = 0.0
     do k=2,kmax

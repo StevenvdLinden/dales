@@ -1059,6 +1059,8 @@ contains
 
     call D_MPI_BCAST(ug       ,kmax,0,comm3d,mpierr)
     call D_MPI_BCAST(vg       ,kmax,0,comm3d,mpierr)
+    call D_MPI_BCAST(dpdxl    ,kmax,0,comm3d,mpierr) ! SvdL, 20241111: broadcast new pressure gradients
+    call D_MPI_BCAST(dpdyl    ,kmax,0,comm3d,mpierr)
     call D_MPI_BCAST(wfls     ,kmax,0,comm3d,mpierr)
     call D_MPI_BCAST(dqtdxls  ,kmax,0,comm3d,mpierr)
     call D_MPI_BCAST(dqtdyls  ,kmax,0,comm3d,mpierr)

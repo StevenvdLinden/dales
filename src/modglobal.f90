@@ -28,20 +28,20 @@ implicit none
 save
 
       ! Simulation dimensions (parconst.f90)
-      integer :: itot = 64
+      integer :: itot = 64      !<  SvdL, 20240925: = total physical gridcells in WHOLE DOMAIN
       integer :: jtot = 64
-      integer :: imax
+      integer :: imax           !<  SvdL, 20240925: = total number of PHYSICAL GRIDCELLS per MPI DOMAIN
       integer :: jmax
       integer :: kmax = 96
-      integer ::  i1
-      integer ::  j1
-      integer ::  k1
-      integer ::  k2
-      integer ::  i2
+      integer ::  i1            !<  SvdL, 20240925: = index of final PHYSICAL CELL on MPI DOMAIN (addition: starting physical index will always be 2)
+      integer ::  j1        
+      integer ::  k1          
+      integer ::  k2      
+      integer ::  i2            !<  SvdL, 20240925: = i1 + 1 (use of this not yet understood)
       integer ::  j2
       integer ::  nsv = 0       !< Number of additional scalar fields
 
-      integer ::  ih=3
+      integer ::  ih=3 !<  SvdL, 20240925: this is the amount of ghost cells...
       integer ::  jh=3
       integer ::  kh=1
       integer ::  kcb=0
@@ -252,8 +252,9 @@ save
       real(field_r) :: ijtot
       real(field_r), allocatable :: dzf(:), dzfi(:) !<  thickness of full level, and inverse
       real(field_r), allocatable :: dzh(:), dzhi(:) !<  thickness of half level, and inverse
-      real(field_r), allocatable :: zh(:)           !<  height of half level [m]
-      real(field_r), allocatable :: zf(:)           !<  height of full level [m]
+      real(field_r), allocatable :: zh(:)           !<  height of half level [m] (= center of grid cell)
+      real(field_r), allocatable :: zf(:)           !<  height of full level [m] (= face of grid cell)
+
       real(field_r) :: xsize    = -1                !<  domain size in x-direction
       real(field_r) :: ysize    = -1                !<  domain size in y-direction
       real(field_r), allocatable :: delta(:)        !<  (dx*dy*dz)**(1/3)
@@ -270,6 +271,7 @@ contains
 !! Set courant number, calculate the grid sizes (both computational and physical), and set the coriolis parameter
   subroutine initglobal
     use modmpi, only : nprocx, nprocy, myid,comm3d, mpierr, D_MPI_BCAST
+    ! use modibmORdata, only : lapply_ibm, !< SvdL, 20240925: ibm requires minimum amount of ghostcells, so enforce that here.. THIS WON'T WORK AS IBM IS NOT "KNOWN" YET AT THIS STAGE.. SEE PROGRAM.F90
     implicit none
 
     integer :: advarr(4)
@@ -360,6 +362,11 @@ contains
       jh = 1
       kh = 1
     end if
+
+    ! if ( lapply_ibm ) !< SvdL.. 20241009: still see how to do this,... see above. 
+    !< THIS IS UGLY BUT FOR NOW JUST MAKE SURE THAT ENOUGH GHOST POINTS EXIST FOR POTENTIAL USE OF IBM
+    ih = 3
+    jh = 3
 
     ! Global constants
 

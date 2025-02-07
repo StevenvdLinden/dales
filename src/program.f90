@@ -163,6 +163,8 @@ program DALES
   use modemission,     only : emission
   use modopenboundary, only : openboundary_ghost,openboundary_tend,openboundary_phasevelocity,openboundary_turb
 
+  use modibm,          only : initibm, applyibm, exitibm, forcingpoints_ek, internalpoints_ek    !< SvdL, 20240925: added use statement for new ibm
+
 !----------------------------------------------------------------
 !     0.2     USE STATEMENTS FOR TIMER MODULE
 !----------------------------------------------------------------
@@ -226,6 +228,8 @@ program DALES
   !call initspectra2
   call initcape
 
+  call initibm            !< SvdL, 20240925: added initialization for new ibm module MAYBE NOT HERE???
+
 #if defined(_OPENACC)
   call update_gpu
 #endif
@@ -274,6 +278,11 @@ program DALES
 !-----------------------------------------------------
     call advection
     call subgrid
+
+    !< SvdL, 20241012: at this stage, regular eddy diffusivities are known, so locally correct them when using IBM AND Smagorinsky
+    call forcingpoints_ek
+    call internalpoints_ek
+
     call canopy
     call samptend(tend_subg)
 
@@ -308,6 +317,10 @@ program DALES
     call grwdamp !damping at top of the model
 !JvdD    call tqaver !set thl, qt and sv(n) equal to slab average at level kmax
     call samptend(tend_topbound)
+
+    !< SvdL, 20241012: call applyibm just before Poisson solver after all other tendencies are known..  
+    call applyibm
+
     call poisson
     call samptend(tend_pois,lastterm=.true.)
     if(lopenbc) call openboundary_phasevelocity()
@@ -408,5 +421,6 @@ program DALES
   call exittimestat
   call exitmodules
 
+  call exitibm
 
 end program DALES

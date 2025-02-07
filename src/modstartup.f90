@@ -104,8 +104,10 @@ contains
     use modversion,        only : git_version
     use modopenboundary,   only : initopenboundary,openboundary_divcorr,openboundary_excjs,lbuoytop
     use modchecksim,       only : chkdiv
+
+    use modibm,            only : initibm    !< SvdL, 20241012: added this here.. want to run ibm already at this stage.
 #if defined(_OPENACC)
-    use modgpu,             only : initgpu
+    use modgpu,            only : initgpu
 #endif
 
     implicit none

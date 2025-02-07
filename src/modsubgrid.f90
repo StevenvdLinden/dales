@@ -68,7 +68,7 @@ contains
 
     cm = cf / (2. * pi) * (1.5*alpha_kolm)**(-1.5)
 
-!     ch   = 2. * alpha_kolm / beta_kolm
+    !ch   = 2. * alpha_kolm / beta_kolm
     ch   = 1.0/Prandtl
     ch2  = ch-ch1
 
@@ -98,7 +98,6 @@ contains
     else
        anis_fac = 1.   !horizontal = vertical diffusion
     endif
-
 
     if (myid==0) then
       write (6,*) 'cf    = ',cf
@@ -157,19 +156,19 @@ contains
 
   subroutine subgrid
 
- ! Diffusion subroutines
-! Thijs Heus, Chiel van Heerwaarden, 15 June 2007
+  ! Diffusion subroutines
+  ! Thijs Heus, Chiel van Heerwaarden, 15 June 2007
 
-    use modglobal, only : nsv, lmoist, deltai, delta, dzf, dzh, lopenbc, lboundary, lperiodic
-    use modfields, only : up,vp,wp,e12p,thl0,thlp,qt0,qtp,sv0,svp,u0,v0,w0,rhobh,rhobf,e120,dthvdz, thvf
-    use modsurfdata,only : thlflux,qtflux,svflux,ustar,dudz,dvdz
+    use modglobal, only   : nsv, lmoist, deltai, delta, dzf, dzh, lopenbc, lboundary, lperiodic
+    use modfields, only   : up,vp,wp,e12p,thl0,thlp,qt0,qtp,sv0,svp,u0,v0,w0,rhobh,rhobf,e120,dthvdz, thvf
+    use modsurfdata, only : thlflux,qtflux,svflux,ustar,dudz,dvdz
 
     implicit none
     integer :: n,sx=2,sy=2
     
     call timer_tic('modsubgrid/subgrid', 0)
 
-    if(lopenbc) then ! If openbounaries are used only calculate tendencies for non-domain boundary cells
+    if(lopenbc) then ! If openbounaries are used, only calculate tendencies for non-domain boundary cells
       if(lboundary(1).and. .not. lperiodic(1)) sx = 3
       if(lboundary(3).and. .not. lperiodic(3)) sy = 3
     endif
@@ -203,239 +202,245 @@ contains
     deallocate(ekm,ekh,zlt,sbdiss,sbbuo,sbshr,csz,anis_fac)
   end subroutine exitsubgrid
 
-   subroutine closure
+  !-----------------------------------------------------------------|
+  !                                                                 |
+  !*** *closure*  calculates K-coefficients                         |
+  !                                                                 |
+  !      Hans Cuijpers   I.M.A.U.   06/01/1995                      |
+  !                                                                 |
+  !     purpose.                                                    |
+  !     --------                                                    |
+  !                                                                 |
+  !     All the K-closure factors are calculated.                   |
+  !                                                                 |
+  !     ekm(i,j,k) = k sub m : for velocity-closure                 |
+  !     ekh(i,j,k) = k sub h : for temperture-closure               |
+  !     ekh(i,j,k) = k sub h = k sub c : for concentration-closure  |
+  !                                                                 |
+  !     We will use the next model for these factors:               |
+  !                                                                 |
+  !     k sub m = 0.12 * l * sqrt(E)                                |
+  !                                                                 |
+  !     k sub h = k sub c = ( 1 + (2*l)/D ) * k sub m               |
+  !                                                                 |
+  !           where : l = mixing length  ( in model = z2 )          |
+  !                   E = subgrid energy                            |
+  !                   D = grid-size distance                        |
+  !                                                                 |
+  !**   interface.                                                  |
+  !     ----------                                                  |
+  !                                                                 |
+  !             *closure* is called from *program*.                 |
+  !                                                                 |
+  !-----------------------------------------------------------------|
 
-!-----------------------------------------------------------------|
-!                                                                 |
-!*** *closure*  calculates K-coefficients                         |
-!                                                                 |
-!      Hans Cuijpers   I.M.A.U.   06/01/1995                      |
-!                                                                 |
-!     purpose.                                                    |
-!     --------                                                    |
-!                                                                 |
-!     All the K-closure factors are calculated.                   |
-!                                                                 |
-!     ekm(i,j,k) = k sub m : for velocity-closure                 |
-!     ekh(i,j,k) = k sub h : for temperture-closure               |
-!     ekh(i,j,k) = k sub h = k sub c : for concentration-closure  |
-!                                                                 |
-!     We will use the next model for these factors:               |
-!                                                                 |
-!     k sub m = 0.12 * l * sqrt(E)                                |
-!                                                                 |
-!     k sub h = k sub c = ( 1 + (2*l)/D ) * k sub m               |
-!                                                                 |
-!           where : l = mixing length  ( in model = z2 )          |
-!                   E = subgrid energy                            |
-!                   D = grid-size distance                        |
-!                                                                 |
-!**   interface.                                                  |
-!     ----------                                                  |
-!                                                                 |
-!             *closure* is called from *program*.                 |
-!                                                                 |
-!-----------------------------------------------------------------|
+  subroutine closure
 
   use modglobal,   only : i1,j1,kmax,k1,ih,jh,i2,j2,delta,ekmin,grav,zf,fkar,deltai, &
-                          dxi,dyi,dzf,dzfi,dzhi,dzh,lopenbc,lboundary,lperiodic
+                          dxi,dyi,dzf,dzfi,dzhi,dzh,lopenbc,lboundary,lperiodic, eps1
   use modfields,   only : dthvdz,e120,u0,v0,w0,thvf
   use modsurfdata, only : dudz,dvdz,z0m
   use modmpi,      only : excjs
   use modopenboundary, only : openboundary_excjs
   implicit none
 
-  real    :: strain2,mlen
-  integer :: i,j,k
+    real    :: strain2, mlen, RiRatio
+    integer :: i,j,k
 
-  if(lsmagorinsky) then
-    ! First level
-    mlen = csz(1) * delta(1)
-    !$acc parallel loop collapse(2) private(strain2) async(1)
-    do i = 2, i1
-      do j = 2, j1
-        strain2 = ( &
-          ((u0(i+1,j  ,1)-u0(i,j,1))*dxi    )**2 + &
-          ((v0(i  ,j+1,1)-v0(i,j,1))*dyi    )**2 + &
-          ((w0(i  ,j  ,2)-w0(i,j,1))*dzfi(1))**2 )
-
-        strain2 = strain2 + 0.5_field_r * ( &
-                  ( 0.25_field_r*(w0(i+1,j,2)-w0(i-1,j,2))*dxi + &
-                    dudz(i,j))**2 )
-
-        strain2 = strain2 + 0.125_field_r * ( &
-              ((u0(i  ,j+1,1)-u0(i  ,j  ,1)) *dyi + &
-               (v0(i  ,j+1,1)-v0(i-1,j+1,1)) *dxi )**2    + &
-              ((u0(i  ,j  ,1)-u0(i  ,j-1,1)) *dyi + &
-               (v0(i  ,j  ,1)-v0(i-1,j  ,1)) *dxi )**2    + &
-              ((u0(i+1,j  ,1)-u0(i+1,j-1,1)) *dyi + &
-               (v0(i+1,j  ,1)-v0(i  ,j  ,1)) *dxi )**2    + &
-              ((u0(i+1,j+1,1)-u0(i+1,j  ,1)) *dyi + &
-               (v0(i+1,j+1,1)-v0(i  ,j+1,1)) *dxi )**2 )
-
-        strain2 = strain2 + 0.5_field_r * ( &
-                  ( 0.25_field_r*(w0(i,j+1,2)-w0(i,j-1,2))*dyi + &
-                    dvdz(i,j) )**2 )
-
-        ekm(i,j,1)  = mlen ** 2 * sqrt(2 * strain2)
-        ekh(i,j,1)  = ekm(i,j,1) / Prandtl
-
-        ekm(i,j,1) = max(ekm(i,j,1),ekmin)
-        ekh(i,j,1) = max(ekh(i,j,1),ekmin)
-      end do
-    end do
-
-    ! Other levels
-    !$acc parallel loop collapse(3) default(present) private(mlen, strain2) async(2)
-    do k = 2, kmax
+    if(lsmagorinsky) then
+      ! First level
+      mlen = csz(1) * delta(1)
+      !$acc parallel loop collapse(2) private(strain2) async(1)
       do i = 2, i1
         do j = 2, j1
-          mlen = csz(k) * delta(k)
-          strain2 =  ( &
-            ((u0(i+1,j  ,k  )-u0(i,j,k))*dxi     )**2 + &
-            ((v0(i  ,j+1,k  )-v0(i,j,k))*dyi     )**2 + &
-            ((w0(i  ,j  ,k+1)-w0(i,j,k))*dzfi(k) )**2 )
+          strain2 = ( &
+            ((u0(i+1,j  ,1)-u0(i,j,1))*dxi    )**2 + &
+            ((v0(i  ,j+1,1)-v0(i,j,1))*dyi    )**2 + &
+            ((w0(i  ,j  ,2)-w0(i,j,1))*dzfi(1))**2 )
+
+          strain2 = strain2 + 0.5_field_r * ( &
+                    ( 0.25_field_r*(w0(i+1,j,2)-w0(i-1,j,2))*dxi + &
+                      dudz(i,j))**2 )
 
           strain2 = strain2 + 0.125_field_r * ( &
-            ((w0(i  ,j  ,k+1)-w0(i-1,j,k+1))*dxi + &
-             (u0(i  ,j  ,k+1)-u0(i  ,j,k  ))*dzhi(k+1) )**2 + &
-            ((w0(i  ,j  ,k  )-w0(i-1,j,k  ))*dxi + &
-             (u0(i  ,j  ,k  )-u0(i  ,j,k-1))*dzhi(k)   )**2 + &
-            ((w0(i+1,j  ,k  )-w0(i  ,j,k  ))*dxi + &
-             (u0(i+1,j  ,k  )-u0(i+1,j,k-1))*dzhi(k)   )**2 + &
-            ((w0(i+1,j  ,k+1)-w0(i  ,j,k+1))*dxi + &
-             (u0(i+1,j  ,k+1)-u0(i+1,j,k  ))*dzhi(k+1) )**2 )
+                ((u0(i  ,j+1,1)-u0(i  ,j  ,1)) *dyi + &
+                (v0(i  ,j+1,1)-v0(i-1,j+1,1)) *dxi )**2    + &
+                ((u0(i  ,j  ,1)-u0(i  ,j-1,1)) *dyi + &
+                (v0(i  ,j  ,1)-v0(i-1,j  ,1)) *dxi )**2    + &
+                ((u0(i+1,j  ,1)-u0(i+1,j-1,1)) *dyi + &
+                (v0(i+1,j  ,1)-v0(i  ,j  ,1)) *dxi )**2    + &
+                ((u0(i+1,j+1,1)-u0(i+1,j  ,1)) *dyi + &
+                (v0(i+1,j+1,1)-v0(i  ,j+1,1)) *dxi )**2 )
 
-          strain2 = strain2 + 0.125_field_r * ( &
-            ((u0(i  ,j+1,k  )-u0(i  ,j  ,k  )) *dyi + &
-             (v0(i  ,j+1,k  )-v0(i-1,j+1,k  )) *dxi )**2 + &
-            ((u0(i  ,j  ,k  )-u0(i  ,j-1,k  )) *dyi + &
-             (v0(i  ,j  ,k  )-v0(i-1,j  ,k  )) *dxi )**2 + &
-            ((u0(i+1,j  ,k  )-u0(i+1,j-1,k  )) *dyi + &
-             (v0(i+1,j  ,k  )-v0(i  ,j  ,k  )) *dxi )**2 + &
-            ((u0(i+1,j+1,k  )-u0(i+1,j  ,k  )) *dyi + &
-             (v0(i+1,j+1,k  )-v0(i  ,j+1,k  )) *dxi )**2 )
+          strain2 = strain2 + 0.5_field_r * ( &
+                    ( 0.25_field_r*(w0(i,j+1,2)-w0(i,j-1,2))*dyi + &
+                      dvdz(i,j) )**2 )
+BLABLABLACHECKHIER
+          ! SvdL, 20241024: take ratio of gradient Richardson number to critical Richardson number (equal to Prandtl in Smagorinsky-Lilly model)
+          RiRatio    = min( grav/thvf(k) * dthvdz(i,j,k) / (2. * strain2 * Prandtl) , (1.0_field_r - eps1) ) 
 
-          strain2 = strain2 + 0.125_field_r * ( &
-            ((v0(i  ,j  ,k+1)-v0(i  ,j  ,k  )) *dzhi(k+1) + &
-             (w0(i  ,j  ,k+1)-w0(i  ,j-1,k+1)) *dyi )**2  + &
-            ((v0(i  ,j  ,k  )-v0(i  ,j  ,k-1)) *dzhi(k)   + &
-             (w0(i  ,j  ,k  )-w0(i  ,j-1,k  )) *dyi )**2  + &
-            ((v0(i  ,j+1,k  )-v0(i  ,j+1,k-1)) *dzhi(k)   + &
-             (w0(i  ,j+1,k  )-w0(i  ,j  ,k  )) *dyi )**2  + &
-            ((v0(i  ,j+1,k+1)-v0(i  ,j+1,k  )) *dzhi(k+1) + &
-             (w0(i  ,j+1,k+1)-w0(i  ,j  ,k+1)) *dyi )**2 )
+          ekm(i,j,1) = mlen ** 2 * sqrt(2 * strain2) * sqrt(1. - RiRatio)
+          ekh(i,j,1) = ekm(i,j,1) / Prandtl
 
-          ekm(i,j,k)  = mlen ** 2 * sqrt(2 * strain2)
-          ekh(i,j,k)  = ekm(i,j,k) / Prandtl
-
-          ekm(i,j,k) = max(ekm(i,j,k),ekmin)
-          ekh(i,j,k) = max(ekh(i,j,k),ekmin)
+          ekm(i,j,1) = max(ekm(i,j,1),ekmin)
+          ekh(i,j,1) = max(ekh(i,j,1),ekmin)
         end do
       end do
-    end do
-    !$acc wait(1,2)
-  ! do TKE scheme
- else
-    ! choose one of ldelta, ldelta+lmason, lanisotropic, or none of them for Deardorff length scale adjustment
-    if (ldelta .and. .not. lmason) then
-       !$acc parallel loop collapse(3) default(present)
-       do k = 1, kmax
+
+      ! Other levels
+      !$acc parallel loop collapse(3) default(present) private(mlen, strain2) async(2)
+      do k = 2, kmax
+        do i = 2, i1
           do j = 2, j1
-             do i = 2, i1
-                zlt(i,j,k) = delta(k)
+            mlen = csz(k) * delta(k)
+            strain2 =  ( &
+              ((u0(i+1,j  ,k  )-u0(i,j,k))*dxi     )**2 + &
+              ((v0(i  ,j+1,k  )-v0(i,j,k))*dyi     )**2 + &
+              ((w0(i  ,j  ,k+1)-w0(i,j,k))*dzfi(k) )**2 )
 
-                ekm(i,j,k) = cm * zlt(i,j,k) * e120(i,j,k)
-                ekh(i,j,k) = ch * ekm(i,j,k)
+            strain2 = strain2 + 0.125_field_r * ( &
+              ((w0(i  ,j  ,k+1)-w0(i-1,j,k+1))*dxi + &
+              (u0(i  ,j  ,k+1)-u0(i  ,j,k  ))*dzhi(k+1) )**2 + &
+              ((w0(i  ,j  ,k  )-w0(i-1,j,k  ))*dxi + &
+              (u0(i  ,j  ,k  )-u0(i  ,j,k-1))*dzhi(k)   )**2 + &
+              ((w0(i+1,j  ,k  )-w0(i  ,j,k  ))*dxi + &
+              (u0(i+1,j  ,k  )-u0(i+1,j,k-1))*dzhi(k)   )**2 + &
+              ((w0(i+1,j  ,k+1)-w0(i  ,j,k+1))*dxi + &
+              (u0(i+1,j  ,k+1)-u0(i+1,j,k  ))*dzhi(k+1) )**2 )
 
-                ekm(i,j,k) = max(ekm(i,j,k),ekmin)
-                ekh(i,j,k) = max(ekh(i,j,k),ekmin)
-             end do
+            strain2 = strain2 + 0.125_field_r * ( &
+              ((u0(i  ,j+1,k  )-u0(i  ,j  ,k  )) *dyi + &
+              (v0(i  ,j+1,k  )-v0(i-1,j+1,k  )) *dxi )**2 + &
+              ((u0(i  ,j  ,k  )-u0(i  ,j-1,k  )) *dyi + &
+              (v0(i  ,j  ,k  )-v0(i-1,j  ,k  )) *dxi )**2 + &
+              ((u0(i+1,j  ,k  )-u0(i+1,j-1,k  )) *dyi + &
+              (v0(i+1,j  ,k  )-v0(i  ,j  ,k  )) *dxi )**2 + &
+              ((u0(i+1,j+1,k  )-u0(i+1,j  ,k  )) *dyi + &
+              (v0(i+1,j+1,k  )-v0(i  ,j+1,k  )) *dxi )**2 )
+
+            strain2 = strain2 + 0.125_field_r * ( &
+              ((v0(i  ,j  ,k+1)-v0(i  ,j  ,k  )) *dzhi(k+1) + &
+              (w0(i  ,j  ,k+1)-w0(i  ,j-1,k+1)) *dyi )**2  + &
+              ((v0(i  ,j  ,k  )-v0(i  ,j  ,k-1)) *dzhi(k)   + &
+              (w0(i  ,j  ,k  )-w0(i  ,j-1,k  )) *dyi )**2  + &
+              ((v0(i  ,j+1,k  )-v0(i  ,j+1,k-1)) *dzhi(k)   + &
+              (w0(i  ,j+1,k  )-w0(i  ,j  ,k  )) *dyi )**2  + &
+              ((v0(i  ,j+1,k+1)-v0(i  ,j+1,k  )) *dzhi(k+1) + &
+              (w0(i  ,j+1,k+1)-w0(i  ,j  ,k+1)) *dyi )**2 )
+
+            ! SvdL, 20241024: take ratio of gradient Richardson number to critical Richardson number (equal to Prandtl in Smagorinsky-Lilly model)
+            RiRatio    = min( grav/thvf(k) * dthvdz(i,j,k) / (2. * strain2 * Prandtl) , (1.0_field_r - eps1) ) 
+
+            ekm(i,j,1) = mlen ** 2 * sqrt(2 * strain2) * sqrt(1. - RiRatio)
+            ekh(i,j,k) = ekm(i,j,k) / Prandtl
+
+            ekm(i,j,k) = max(ekm(i,j,k),ekmin)
+            ekh(i,j,k) = max(ekh(i,j,k),ekmin)
           end do
-       end do
-    else if (ldelta .and. lmason) then ! delta scheme with Mason length scale correction
-       !$acc parallel loop collapse(3) default(present)
-       do k = 1, kmax
-          do j = 2, j1
-             do i = 2, i1
-                zlt(i,j,k) = delta(k)
-                zlt(i,j,k) = (1 / zlt(i,j,k) ** nmason + 1 / ( fkar * (zf(k) + z0m(i,j)))**nmason) ** (-1/nmason)
-
-                ekm(i,j,k) = cm * zlt(i,j,k) * e120(i,j,k)
-                ekh(i,j,k) = ch * ekm(i,j,k)
-
-                ekm(i,j,k) = max(ekm(i,j,k),ekmin)
-                ekh(i,j,k) = max(ekh(i,j,k),ekmin)
-             end do
-          end do
-       end do
-    else if (lanisotrop) then ! Anisotropic diffusion,  https://doi.org/10.1029/2022MS003095
-       !$acc parallel loop collapse(3) default(present)
-       do k = 1, kmax
-          do j = 2, j1
-             do i = 2, i1
-                zlt(i,j,k) = dzf(k)
-
-                ekm(i,j,k) = cm * zlt(i,j,k) * e120(i,j,k)
-                ekh(i,j,k) = ch * ekm(i,j,k)
-
-                ekm(i,j,k) = max(ekm(i,j,k),ekmin)
-                ekh(i,j,k) = max(ekh(i,j,k),ekmin)
-             end do
-          end do
-       end do
-    else ! Deardorff lengthscale correction
-       !$acc parallel loop collapse(3) default(present)
-       do k = 1, kmax
-          do j = 2, j1
-             do i = 2, i1
-                zlt(i,j,k) = delta(k)
-
-                !original
-                !if (dthvdz(i,j,k) > 0) then
-                !zlt(i,j,k) = min(delta(k),cn*e120(i,j,k)/sqrt(grav/thvf(k)*abs(dthvdz(i,j,k))))
-                !end if
-
-                ! alternative without if
-                zlt(i,j,k) = min(delta(k), &
-                     cn*e120(i,j,k) / sqrt( grav/thvf(k) * abs(dthvdz(i,j,k))) + &
-                     delta(k) * (1.0_field_r-sign(1.0_field_r,dthvdz(i,j,k))))
-                ! the final line is 0 if dthvdz(i,j,k) > 0, else 2*delta(k)
-                ! ensuring that zlt(i,j,k) = delta(k) when dthvdz < 0, as
-                ! in the original scheme.
-
-                ekm(i,j,k) = cm * zlt(i,j,k) * e120(i,j,k)
-                ekh(i,j,k) = (ch1 + ch2 * zlt(i,j,k)*deltai(k)) * ekm(i,j,k)
-
-                ekm(i,j,k) = max(ekm(i,j,k),ekmin)
-                ekh(i,j,k) = max(ekh(i,j,k),ekmin)
-             end do
-          end do
-       end do
-    end if
-  end if
-!*************************************************************
-!     Set cyclic boundary condition for K-closure factors.
-!*************************************************************
-   if(lopenbc) then ! Set cyclic conditions only for non-domain boundaries if openboundaries are used
-    call openboundary_excjs(ekm   , 2,i1,2,j1,1,k1,ih,jh, &
-      & (.not.lboundary(1:4)).or.lperiodic(1:4))
-    call openboundary_excjs(ekh   , 2,i1,2,j1,1,k1,ih,jh, &
-      & (.not.lboundary(1:4)).or.lperiodic(1:4))
+        end do
+      end do
+      !$acc wait(1,2)
+    ! do TKE scheme
   else
-    call excjs( ekm           , 2,i1,2,j1,1,k1,ih,jh)
-    call excjs( ekh           , 2,i1,2,j1,1,k1,ih,jh)
-  endif
+      ! choose one of ldelta, ldelta+lmason, lanisotropic, or none of them for Deardorff length scale adjustment
+      if (ldelta .and. .not. lmason) then
+        !$acc parallel loop collapse(3) default(present)
+        do k = 1, kmax
+            do j = 2, j1
+              do i = 2, i1
+                  zlt(i,j,k) = delta(k)
 
-  !$acc parallel loop collapse(2) default(present)
-  do j = 1, j2
-    do i = 1, i2
-      ekm(i,j,k1)  = ekm(i,j,kmax)
-      ekh(i,j,k1)  = ekh(i,j,kmax)
+                  ekm(i,j,k) = cm * zlt(i,j,k) * e120(i,j,k)
+                  ekh(i,j,k) = ch * ekm(i,j,k)
+
+                  ekm(i,j,k) = max(ekm(i,j,k),ekmin)
+                  ekh(i,j,k) = max(ekh(i,j,k),ekmin)
+              end do
+            end do
+        end do
+      else if (ldelta .and. lmason) then ! delta scheme with Mason length scale correction
+        !$acc parallel loop collapse(3) default(present)
+        do k = 1, kmax
+            do j = 2, j1
+              do i = 2, i1
+                  zlt(i,j,k) = delta(k)
+                  zlt(i,j,k) = (1 / zlt(i,j,k) ** nmason + 1 / ( fkar * (zf(k) + z0m(i,j)))**nmason) ** (-1/nmason)
+
+                  ekm(i,j,k) = cm * zlt(i,j,k) * e120(i,j,k)
+                  ekh(i,j,k) = ch * ekm(i,j,k)
+
+                  ekm(i,j,k) = max(ekm(i,j,k),ekmin)
+                  ekh(i,j,k) = max(ekh(i,j,k),ekmin)
+              end do
+            end do
+        end do
+      else if (lanisotrop) then ! Anisotropic diffusion,  https://doi.org/10.1029/2022MS003095
+        !$acc parallel loop collapse(3) default(present)
+        do k = 1, kmax
+            do j = 2, j1
+              do i = 2, i1
+                  zlt(i,j,k) = dzf(k)
+
+                  ekm(i,j,k) = cm * zlt(i,j,k) * e120(i,j,k)
+                  ekh(i,j,k) = ch * ekm(i,j,k)
+
+                  ekm(i,j,k) = max(ekm(i,j,k),ekmin)
+                  ekh(i,j,k) = max(ekh(i,j,k),ekmin)
+              end do
+            end do
+        end do
+      else ! Deardorff lengthscale correction
+        !$acc parallel loop collapse(3) default(present)
+        do k = 1, kmax
+            do j = 2, j1
+              do i = 2, i1
+                  zlt(i,j,k) = delta(k)
+
+                  !original
+                  !if (dthvdz(i,j,k) > 0) then
+                  !zlt(i,j,k) = min(delta(k),cn*e120(i,j,k)/sqrt(grav/thvf(k)*abs(dthvdz(i,j,k))))
+                  !end if
+
+                  ! alternative without if
+                  zlt(i,j,k) = min(delta(k), &
+                      cn*e120(i,j,k) / sqrt( grav/thvf(k) * abs(dthvdz(i,j,k))) + &
+                      delta(k) * (1.0_field_r-sign(1.0_field_r,dthvdz(i,j,k))))
+                  ! the final line is 0 if dthvdz(i,j,k) > 0, else 2*delta(k)
+                  ! ensuring that zlt(i,j,k) = delta(k) when dthvdz < 0, as
+                  ! in the original scheme.
+
+                  ekm(i,j,k) = cm * zlt(i,j,k) * e120(i,j,k)
+                  ekh(i,j,k) = (ch1 + ch2 * zlt(i,j,k)*deltai(k)) * ekm(i,j,k)
+
+                  ekm(i,j,k) = max(ekm(i,j,k),ekmin)
+                  ekh(i,j,k) = max(ekh(i,j,k),ekmin)
+              end do
+            end do
+        end do
+      end if
+    end if
+    !*************************************************************
+    !     Set cyclic boundary condition for K-closure factors.
+    !*************************************************************
+    if(lopenbc) then ! Set cyclic conditions only for non-domain boundaries if openboundaries are used
+      call openboundary_excjs(ekm   , 2,i1,2,j1,1,k1,ih,jh, &
+        & (.not.lboundary(1:4)).or.lperiodic(1:4))
+      call openboundary_excjs(ekh   , 2,i1,2,j1,1,k1,ih,jh, &
+        & (.not.lboundary(1:4)).or.lperiodic(1:4))
+    else
+      call excjs( ekm           , 2,i1,2,j1,1,k1,ih,jh)
+      call excjs( ekh           , 2,i1,2,j1,1,k1,ih,jh)
+    endif
+
+    !$acc parallel loop collapse(2) default(present)
+    do j = 1, j2
+      do i = 1, i2
+        ekm(i,j,k1)  = ekm(i,j,kmax)
+        ekh(i,j,k1)  = ekh(i,j,kmax)
+      end do
     end do
-  end do
 
-  return
+    return
   end subroutine closure
 
   subroutine sources

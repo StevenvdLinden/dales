@@ -79,12 +79,11 @@ contains
     integer,        allocatable :: Nairl(:)       !< Array of number of air cells at each vertical level
     integer,        allocatable :: tixw_p(:,:), tixw_m(:,:), tiyw_p(:,:), tiyw_m(:,:), tizw_p(:,:)!, izw_m(:,:) 
 
-    call timer_tic('modibm/initibm',0)
-
     !< Read in NAMOPTIONS parameters related to IBM
-    namelist/NAMIBM/ lapply_ibm, &
-                               lwallheat, &
-                               thlwall, thlibm, thlroof, qtibm, lpoislast, z0m_wall, z0h_wall
+    namelist/NAMIBM/ & 
+      lapply_ibm, lwallheat, thlwall, thlibm, thlroof, qtibm, lpoislast, z0m_wall, z0h_wall
+
+    call timer_tic('modibm/initibm',0)
 
     if( myid==0 ) then
 

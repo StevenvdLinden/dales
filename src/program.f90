@@ -163,6 +163,16 @@ program DALES
   use modemission,     only : emission
   use modopenboundary, only : openboundary_ghost,openboundary_tend,openboundary_phasevelocity,openboundary_turb
 
+  !SvdL, 20250208: TODO check if still suitable location
+  !cstep IBM for urban terrain
+  use modibm,          only : applyibm, exitibm, zerowallvelocity, fluid_mask ! cstep cibm 
+  use modibmdata,      only : lpoislast 
+
+  !SvdL, 20250208: TODO check if still required and/or may be handled by different modules (modemission, modopenboundary)
+  !cstep  the following modules are needed if the concurrent precursor method is applied
+  use modnudgeboundary, only : initnudgeboundary, nudgeboundary, exitnudgeboundary, lnudge_boundary_sv !PVD
+
+ 
 !----------------------------------------------------------------
 !     0.2     USE STATEMENTS FOR TIMER MODULE
 !----------------------------------------------------------------
@@ -225,6 +235,9 @@ program DALES
 
   !call initspectra2
   call initcape
+
+  !SvdL, 20250208: TODO, check what this does a/o still required.. is double w.r.t. 14 lines above
+  call initnudgeboundary !cstep  IBM with concurrent precursor
 
 #if defined(_OPENACC)
   call update_gpu
@@ -302,20 +315,34 @@ program DALES
 
     call samptend(tend_addon)
 
+    !TODO: REWORK / IMPROVE COMMENTS
 !-----------------------------------------------------------------------
-!   3.7  PRESSURE FLUCTUATIONS, TIME INTEGRATION AND BOUNDARY CONDITIONS
+!   3.7  PRESSURE FLUCTUATIONS, IMMERSED BOUNDARY, TIME INTEGRATION AND BOUNDARY CONDITIONS
 !-----------------------------------------------------------------------
     call grwdamp !damping at top of the model
-!JvdD    call tqaver !set thl, qt and sv(n) equal to slab average at level kmax
+    !JvdD    call tqaver !set thl, qt and sv(n) equal to slab average at level kmax
     call samptend(tend_topbound)
+
+    ! TODO, SvdL 20250208: update comments and descriptions..
+    ! TODO, SvdL 20250208: anyway consider 
+    !< MK: Ordering of the Poisson Solver and the IBM, (lpoislast==.true.): 
+           !IBM -> Pois, (lpoislast==.false.): zerowallvelocity -> Pois -> IBM
+    !< MK: If lapply_ibm is not defined or set to .false., the Immersed boundary functions will not be applied
+    if(lpoislast .eqv. .true.)  call applyibm !Apply ibm, argument is needed if concurrent precursor method is used
+    if(lpoislast .eqv. .false.) call zerowallvelocity   !Apply correction on the walls before poisson to reduce loss of mass due to removal of leaking
+
     call poisson
+
+    if(lpoislast .eqv. .false.) call applyibm !Apply ibm
+    !write(6,*) 'after pois 2'
+
     call samptend(tend_pois,lastterm=.true.)
     if(lopenbc) call openboundary_phasevelocity()
 
     call tstep_integrate                        ! Apply tendencies to all variables
 
     call msebudg1
-    ! NOTE: the tendencies are not zeroed yet, but kept for analysis and statistcis
+    ! NOTE: the tendencies are not zeroed yet, but kept for analysis and statistics
     !       Do not change them below this point.
     if(lopenbc) then
       call openboundary_ghost
@@ -408,5 +435,7 @@ program DALES
   call exittimestat
   call exitmodules
 
+  ! for now here, better position later
+  call exitibm
 
 end program DALES

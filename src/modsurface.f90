@@ -65,6 +65,7 @@ module modsurface
   use modsurfdata
   implicit none
   !public  :: initsurface, surface, exitsurface
+  public  :: psim, psih
 
 save
 

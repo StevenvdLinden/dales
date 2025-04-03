@@ -1116,7 +1116,7 @@ contains
   endif
   end subroutine excjs_logical
 
-  subroutine slabsum_real32(aver,ks,kf,var,ib,ie,jb,je,kb,ke,ibs,ies,jbs,jes,kbs,kes)
+  subroutine slabsum_real32(aver,ks,kf,var,ib,ie,jb,je,kb,ke,ibs,ies,jbs,jes,kbs,kes,mask)
     implicit none
 
     integer           :: ks,kf
@@ -1125,24 +1125,44 @@ contains
     real(real32)      :: var (ib:ie,jb:je,kb:ke)
     real(real32)      :: averl(ks:kf)
     real(real32)      :: avers(ks:kf)
-    integer           :: k
+    integer           :: i,j,k, Nl(ks:kf), Ntot(ks:kf)
+    logical, optional :: mask(ib:ie,jb:je,kb:ke)
 
     averl       = 0.
     avers       = 0.
+    Nl          = 0
+    Ntot        = 0
 
-    do k=kbs,kes
-      averl(k) = sum(var(ibs:ies,jbs:jes,k))
-    enddo
+    if ( .not. present(mask)) then
+      do k=kbs,kes
+        averl(k) = sum(var(ibs:ies,jbs:jes,k))
+        Nl(k)    = (ies-ibs) * (jes-jbs)
+      end do
+    else
+      do k=kbs,kes
+        do j=jbs,jes
+          do i=ibs,ies
+            if( mask(i,j,k) ) then
+              averl(k) = averl(k) + var(i,j,k)
+            end if
+          end do 
+        end do      
+        Nl(k) = count(mask(:,:,k))
+      end do 
+    end if
 
     call MPI_ALLREDUCE(averl, avers, kf-ks+1,  MPI_REAL4, &
                        MPI_SUM, comm3d,mpierr)
+    call MPI_ALLREDUCE(Nl, Ntot, kf-ks+1,  MPI_INTEGER, &
+                       MPI_SUM, comm3d,mpierr)                   
 
     aver = aver + avers
+    aver = aver / Ntot
 
     return
   end subroutine slabsum_real32
 
-  subroutine slabsum_real64(aver,ks,kf,var,ib,ie,jb,je,kb,ke,ibs,ies,jbs,jes,kbs,kes)
+  subroutine slabsum_real64(aver,ks,kf,var,ib,ie,jb,je,kb,ke,ibs,ies,jbs,jes,kbs,kes,mask)
     implicit none
 
     integer           :: ks,kf
@@ -1151,59 +1171,114 @@ contains
     real(real64)      :: var (ib:ie,jb:je,kb:ke)
     real(real64)      :: averl(ks:kf)
     real(real64)      :: avers(ks:kf)
-    integer           :: k
+    integer           :: i,j,k, Nl(ks:kf), Ntot(ks:kf)
+    logical, optional :: mask(ib:ie,jb:je,kb:ke)
 
     averl       = 0.
     avers       = 0.
-
-    do k=kbs,kes
-      averl(k) = sum(var(ibs:ies,jbs:jes,k))
-    enddo
+    Nl          = 0
+    Ntot        = 0
+    
+    if ( .not. present(mask)) then
+      do k=kbs,kes
+        averl(k) = sum(var(ibs:ies,jbs:jes,k))
+        Nl(k)    = (ies-ibs) * (jes-jbs)
+      enddo
+    else
+      do k=kbs,kes
+        do j=jbs,jes
+          do i=ibs,ies
+            if( mask(i,j,k) ) then
+              averl(k) = averl(k) + var(i,j,k)
+            end if
+          end do 
+        end do      
+        Nl(k) = count(mask(:,:,k))
+      end do
+    end if
 
     call MPI_ALLREDUCE(averl, avers, kf-ks+1,  MPI_REAL8, &
-                       MPI_SUM, comm3d,mpierr)
+                       MPI_SUM, comm3d,mpierr)                 
+    call MPI_ALLREDUCE(Nl, Ntot, kf-ks+1,  MPI_INTEGER, &
+                       MPI_SUM, comm3d,mpierr)                   
 
     aver = aver + avers
+    aver = aver / Ntot
 
     return
   end subroutine slabsum_real64
+
 #if defined(_OPENACC)
-  subroutine slabsum_real32_gpu(aver,ks,kf,var,ib,ie,jb,je,kb,ke,ibs,ies,jbs,jes,kbs,kes)
+  subroutine slabsum_real32_gpu(aver,ks,kf,var,ib,ie,jb,je,kb,ke,ibs,ies,jbs,jes,kbs,kes,mask)
     implicit none
 
     integer :: ks, kf
     integer :: ib, ie, jb, je, kb, ke, ibs, ies, jbs, jes, kbs, kes
     real(real32), device :: aver(ks:kf)
     real(real32), device :: var(ib:ie, jb:je, kb:ke)
-    integer :: k
+    integer :: i,j,k,  Ntot(ks:kf)
+    logical, optional, device :: mask(ib:ie,jb:je,kb:ke)
 
     !$acc kernels default(present)
-    do k = kbs, kes
-      aver(k) = aver(k) + sum(var(ibs:ies, jbs:jes, k))
-    end do
+    if ( .not. present(mask)) then
+      do k=kbs,kes
+        aver(k) = aver(k) + sum(var(ibs:ies,jbs:jes,k))
+        Ntot(k) = (ies-ibs) * (jes-jbs)
+      end do
+    else
+      do k=kbs,kes
+        do j=jbs,jes
+          do i=ibs,ies
+            if( mask(i,j,k) ) then
+              aver(k) = aver(k) + var(i,j,k)
+            end if
+          end do 
+          Ntot(k) = count(mask(:,:,k))
+        end do
+      end do 
+    end if
     !$acc end kernels
 
     call MPI_ALLREDUCE(MPI_IN_PLACE, aver, kf-ks+1, MPI_REAL4, MPI_SUM, comm3d, mpierr)
+    call MPI_ALLREDUCE(MPI_IN_PLACE, Ntot, kf-ks+1, MPI_INTEGER, MPI_SUM, comm3d, mpierr)
 
+    aver = aver / Ntot
   end subroutine slabsum_real32_gpu
 
-  subroutine slabsum_real64_gpu(aver,ks,kf,var,ib,ie,jb,je,kb,ke,ibs,ies,jbs,jes,kbs,kes)
+  subroutine slabsum_real64_gpu(aver,ks,kf,var,ib,ie,jb,je,kb,ke,ibs,ies,jbs,jes,kbs,kes,mask)
     implicit none
 
     integer :: ks, kf
     integer :: ib, ie, jb, je, kb, ke, ibs, ies, jbs, jes, kbs, kes
     real(real64), device :: aver(ks:kf)
     real(real64), device :: var(ib:ie, jb:je, kb:ke)
-    integer :: k
+    integer :: i,j,k, Ntot(ks:kf)
+    logical, optional, device :: mask(ib:ie,jb:je,kb:ke)
 
     !$acc kernels default(present)
-    do k = kbs, kes
-      aver(k) = aver(k) + sum(var(ibs:ies, jbs:jes, k))
-    end do
+    if ( .not. present(mask)) then
+      do k=kbs,kes
+        aver(k) = aver(k) + sum(var(ibs:ies,jbs:jes,k))
+        Ntot(k) = (ies-ibs) * (jes-jbs)
+      end do
+    else
+      do k=kbs,kes
+        do j=jbs,jes
+          do i=ibs,ies
+            if( mask(i,j,k) ) then
+              aver(k) = aver(k) + var(i,j,k)
+            end if
+          end do 
+          Ntot(k) = count(mask(:,:,k))
+        end do
+      end do 
+    end if
     !$acc end kernels
 
     call MPI_ALLREDUCE(MPI_IN_PLACE, aver, kf-ks+1, MPI_REAL8, MPI_SUM, comm3d, mpierr)
+    call MPI_ALLREDUCE(MPI_IN_PLACE, Ntot, kf-ks+1, MPI_INTEGER, MPI_SUM, comm3d, mpierr)
 
+    aver = aver / Ntot
   end subroutine slabsum_real64_gpu
 #endif
 

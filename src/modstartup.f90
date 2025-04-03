@@ -107,6 +107,9 @@ contains
     use modopenboundary,   only : initopenboundary,openboundary_divcorr,openboundary_excjs,lbuoytop,&
                                   rhointi, openboundary_phasevelocity
 
+    !TODO, SvdL 20250208: check specific order, likely best to keep IBM AFTER openboundaries for now..
+    use modibm,            only : initibm
+
     use modchecksim,       only : chkdiv
 #if defined(_OPENACC)
     use modgpu,             only : initgpu
@@ -355,6 +358,10 @@ contains
     call inittestbed    !reads initial profiles from scm_in.nc, to be used in readinitfiles
     call inittstep
 
+    !SvdL 20250208: check here..
+    call initibm        !MK Initialize for IBM !cstep should be called before initsurface
+    !cstep IBM here ibas_prf will be changed to 2 if ibm is applied
+
     if(.not.lopenbc) then
       call initboundary
     else
@@ -419,14 +426,13 @@ contains
 
   end subroutine startup
 
-
   !> Checks whether crucial parameters are set correctly
   subroutine checkinitvalues
-    use modsurfdata, only: wtsurf, wqsurf, ustin, thls, isurf, ps, lhetero
-    use modglobal,   only: itot, jtot, ysize, xsize, dtmax, runtime, &
-                           startfile, lwarmstart, eps1, imax, jmax, ih, jh
-    use modmpi,      only: myid, nprocx, nprocy, mpierr, MPI_FINALIZE
-    use modtimedep,  only: ltimedep
+    use modsurfdata,  only: wtsurf, wqsurf, ustin, thls, isurf, ps, lhetero
+    use modglobal,    only: itot, jtot, ysize, xsize, dtmax, runtime, &
+                            startfile, lwarmstart, eps1, imax, jmax, ih, jh
+    use modmpi,       only: myid, nprocx, nprocy, mpierr, MPI_FINALIZE
+    use modtimedep,   only: ltimedep
 
     ! Check MPI configuration
     if (mod(jtot, nprocy) /= 0) then
@@ -530,7 +536,8 @@ contains
                                   zf,dzf,dzh,rv,rd,cp,rlv,pref0,om23_gs,&
                                   ijtot,cu,cv,e12min,dzh,cexpnr,ifinput,lwarmstart,ltotruntime,itrestart,&
                                   trestart, ladaptive,llsadv,tnextrestart,longint,lconstexner,lopenbc, linithetero, &
-                                  iinput, input_netcdf, input_ascii
+                                  iinput, input_netcdf, input_ascii, &
+                                  imax, jmax, lmoist !TODO, SvdL, 20250208: check if truly required for IBM
     use modsubgrid,        only : ekm,ekh
     use modsurfdata,       only : wsvsurf, &
                                   thls,tskin,tskinm,tsoil,tsoilm,phiw,phiwm,Wl,Wlm,thvs,qts,isurf,svs,obl,oblav,&
@@ -538,9 +545,14 @@ contains
     use modsurface,        only : surface,qtsurf,dthldz,ps
     use modlsm,            only : init_lsm_tiles
     use modboundary,       only : boundary
-    use modmpi,            only : slabsum,myid,comm3d,mpierr,D_MPI_BCAST, print_info_stderr
+    use modmpi,            only : slabsum,myid,comm3d,mpierr,D_MPI_BCAST, print_info_stderr, &
+                                  myidx, myidy !TODO, SvdL, 20250208: check if truly required for IBM
     use modthermodynamics, only : thermodynamics,calc_halflev
     use moduser,           only : initsurf_user
+    
+    !TODO: SvdL, 20250208: think about logical ordering..
+    use modibm,            only : fluid_mask
+    use modibmdata,        only : thlibm, lapply_ibm
 
     use modtestbed,        only : ltestbed,tb_ps,tb_thl,tb_qt,tb_u,tb_v,tb_w,tb_ug,tb_vg,&
                                   tb_dqtdxls,tb_dqtdyls,tb_qtadv,tb_thladv
@@ -800,6 +812,39 @@ contains
         call randomnize(w0  ,k,randu  ,irandom,ih,jh,negval)
       end do
 
+      ! When using IBM, overwrite prior values and randomnization inside obstabcles thl
+      if (lapply_ibm) then
+        ! write (6,*) 'global scalar settings are modified in ibm mode, zero scalar concentrations, zero slab-mean surface fluxes'
+        ! svprof = 0.
+        ! wsvsurf = 0.
+        do i=2,i1
+          do j=2,j1
+            do k=1,kmax
+              if (fluid_mask(i,j,k)) then
+                thlm(i,j,k)     = thlibm !set to thl_ibm value
+                thl0(i,j,k)     = thlibm
+                qtm(i,j,k)      = qts    !set to qt_ibm value
+                qt0(i,j,k)      = qts
+                um (i:i+1,j,k)  = 0.
+                u0 (i:i+1,j,k)  = 0.
+                vm (i,j:j+1,k)  = 0.
+                v0 (i,j:j+1,k)  = 0.
+                wm (i,j,k:k+1)  = 0.
+                w0 (i,j,k:k+1)  = 0.
+                e12m(i,j,k)     = e12min
+                e120(i,j,k)     = e12min
+                if (nsv > 0) then !TODO, SvdL, check this here..
+                  do n=1,nsv
+                    sv0(i,j,k,n) = 0.
+                    svm(i,j,k,n) = 0.
+                  enddo
+                endif 
+              endif  
+            enddo
+          enddo
+        enddo
+      endif
+
       !-----------------------------------------------------------------
       !    2.2 Initialize surface layer and base profiles
       !-----------------------------------------------------------------
@@ -985,7 +1030,6 @@ contains
 !    2.1 read and initialise fields
 !-----------------------------------------------------------------
 
-
     if(myid==0)then
 
       if (ltestbed) then
@@ -1141,9 +1185,9 @@ contains
     open(unit=ifinput,file=trim(output_prefix)//name,form='unformatted', status='old')
 
       read(ifinput)  (((u0    (i,j,k),i=2-ih,i1+ih),j=2-jh,j1+jh),k=1,k1)
-!       u0 = u0-cu
+      !       u0 = u0-cu
       read(ifinput)  (((v0    (i,j,k),i=2-ih,i1+ih),j=2-jh,j1+jh),k=1,k1)
-!       v0 = v0-cv
+      !       v0 = v0-cv
       read(ifinput)  (((w0    (i,j,k),i=2-ih,i1+ih),j=2-jh,j1+jh),k=1,k1)
       read(ifinput)  (((thl0  (i,j,k),i=2-ih,i1+ih),j=2-jh,j1+jh),k=1,k1)
       read(ifinput)  (((qt0   (i,j,k),i=2-ih,i1+ih),j=2-jh,j1+jh),k=1,k1)
@@ -1172,7 +1216,7 @@ contains
       read(ifinput)   ((tskin(i,j ),i=1,i2      ),j=1,j2      )
       read(ifinput)   ((qskin(i,j ),i=1,i2      ),j=1,j2      )
 
-!!!!! radiation quantities
+      !!!!! radiation quantities
       read(ifinput)  tnext_radiation
       read(ifinput)  (((thlprad (i,j,k),i=2-ih,i1+ih),j=2-jh,j1+jh),k=1,k1)
       read(ifinput)  (((swd     (i,j,k),i=2-ih,i1+ih),j=2-jh,j1+jh),k=1,k1)
@@ -1195,7 +1239,7 @@ contains
       read(ifinput)  ((SW_dn_ca_TOA (i,j ),i=1,i2),j=1,j2)
       read(ifinput)  ((LW_up_ca_TOA (i,j ),i=1,i2),j=1,j2)
       read(ifinput)  ((LW_dn_ca_TOA (i,j ),i=1,i2),j=1,j2)
-!!!!! end of radiation quantities
+      !!!!! end of radiation quantities
 
       if(lhetero) then
         read(ifinput)   ((ps_patch  (i,j),i=1,xpatches),j=1,ypatches)
@@ -1255,7 +1299,7 @@ contains
     end if
 
   end subroutine readrestartfiles
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
   ! this function is called from time stepping,
@@ -1347,7 +1391,7 @@ contains
       write(ifoutput)   ((tskin(i,j ),i=1,i2      ),j=1,j2      )
       write(ifoutput)   ((qskin(i,j ),i=1,i2      ),j=1,j2      )
 
-!!!!! radiation quantities
+      !!!!! radiation quantities
       write(ifoutput)  tnext_radiation
       write(ifoutput)  (((thlprad (i,j,k),i=2-ih,i1+ih),j=2-jh,j1+jh),k=1,k1)
       write(ifoutput)  (((swd     (i,j,k),i=2-ih,i1+ih),j=2-jh,j1+jh),k=1,k1)
@@ -1370,7 +1414,7 @@ contains
       write(ifoutput)  ((SW_dn_ca_TOA (i,j ),i=1,i2),j=1,j2)
       write(ifoutput)  ((LW_up_ca_TOA (i,j ),i=1,i2),j=1,j2)
       write(ifoutput)  ((LW_dn_ca_TOA (i,j ),i=1,i2),j=1,j2)
-!!!!! end of radiation quantities
+      !!!!! end of radiation quantities
 
       if(lhetero) then
         write(ifoutput)  ((ps_patch  (i,j),i=1,xpatches),j=1,ypatches)

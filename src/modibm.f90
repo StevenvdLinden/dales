@@ -428,6 +428,12 @@ contains
 
     ! (SvdL, 16-05-2023:) comment/question: really set it to average at k=1? Options for future changes?
     thlibm = thl0av(1) !assumes inside air has the same temperature as the air outside
+
+    if (abs(thlibm)>280) then !SvdL, added for testing..
+      write(6,*) 'thlibm te hoog', thlibm
+      stop 'ga niet door naar start'
+    endif
+
     qtibm  = qt0av (1) 
 
     rk3coef = rdt / (4. - dble(rk3step))

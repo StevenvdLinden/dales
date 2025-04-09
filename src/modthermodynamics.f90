@@ -287,6 +287,12 @@ contains
      call airslabsum(thl0av,1,k1,thl0,2-ih,i1+ih,2-jh,j1+jh,1,k1,2,i1,2,j1,1,k1,ksfc)
      call airslabsum(qt0av ,1,k1,qt0 ,2-ih,i1+ih,2-jh,j1+jh,1,k1,2,i1,2,j1,1,k1,ksfc)
      call airslabsum(ql0av ,1,k1,ql0 ,2-ih,i1+ih,2-jh,j1+jh,1,k1,2,i1,2,j1,1,k1,ksfc)
+
+     if (abs(thl0av(1))>270) then !SvdL, added for testing..
+       write(6,*) 'thl0av(1) is kapot', thl0av(1)
+       stop 'ga niet terug naar start'
+     end if
+
      u0av  = u0av   + cu
      v0av  = v0av   + cv
      do n=1,nsv

@@ -403,7 +403,7 @@ contains
                                u0, v0, w0, thl0, qt0, e120, sv0, &
                                up, vp, wp, thlp, qtp, e12p, svp, &
                                thl0av, qt0av
-    use modglobal,      only : rk3step,   kmax, i1, j1, k1, ih, jh, rdt, timee, dx, dy, dzh, dzf, nsv, e12min
+    use modglobal,      only : rk3step,   kmax, i1, j1, k1, ih, jh, rdt, timee, dx, dy, dzh, dzf, nsv, e12min, lmoist
     use modsubgriddata, only : ekm!, lsmagorinsky ! (SvdL, 16-05-2023:) added switch for use of Smagorinsky closure
     use modmpi,         only : excjs
     !clater use modnudgeboundary, only : Nsim
@@ -494,7 +494,7 @@ contains
 
 
               call xwallscalar(i,j,k,thl0,tempthlp)  ! zero subgrid flux through the boundary is applied here by subtraction
-              call xwallscalar(i,j,k,qt0 ,tempqtp)
+              if(lmoist) call xwallscalar(i,j,k,qt0 ,tempqtp)
 
               us_at_scalar_min  = 0.5 * ((v0(i-1,j,k) + v0(i-1,j+1,k))**2 + (w0(i-1,j,k)+w0(i-1,j,k+1))**2)**0.5
               us_at_scalar_plus = 0.5 * ((v0(i  ,j,k) + v0(i  ,j+1,k))**2 + (w0(i  ,j,k)+w0(i  ,j,k+1))**2)**0.5
@@ -553,7 +553,7 @@ contains
               tempwp(i,j  ,k+1) = tempwp(i,j  ,k+1) + 0.5 * eomm * ((w0(i,j,k+1)-w0(i,j-1,k+1))/dy)/dy - 0.5 * tau_wv_plus/dy
 
               call ywallscalar(i,j,k,thl0,tempthlp)
-              call ywallscalar(i,j,k,qt0 ,tempqtp)
+              if(lmoist) call ywallscalar(i,j,k,qt0 ,tempqtp)
 
               us_at_scalar_min  = 0.5 * ((u0(i,j-1,k) + u0(i+1,j-1,k))**2 + (w0(i,j-1,k)+w0(i,j-1,k+1))**2)**0.5
               us_at_scalar_plus = 0.5 * ((u0(i,j  ,k) + u0(i+1,j  ,k))**2 + (w0(i,j  ,k)+w0(i,j  ,k+1))**2)**0.5
@@ -597,7 +597,7 @@ contains
 
 
             call xwallscalar(i,j,1,thl0,tempthlp)
-            call xwallscalar(i,j,1,qt0, tempqtp)
+            if(lmoist) call xwallscalar(i,j,1,qt0, tempqtp)
 
             us_at_scalar_min  = 0.5 * ((v0(i-1,j,k) + v0(i-1,j+1,k))**2 + w0(i-1,j,k+1)**2)**0.5
             us_at_scalar_plus = 0.5 * ((v0(i  ,j,k) + v0(i  ,j+1,k))**2 + w0(i  ,j,k+1)**2)**0.5
@@ -634,7 +634,7 @@ contains
 
 
             call ywallscalar(i,j,1,thl0,tempthlp)
-            call ywallscalar(i,j,1,qt0 ,tempqtp)
+            if(lmoist) call ywallscalar(i,j,1,qt0 ,tempqtp)
 
             us_at_scalar_min  = 0.5 * ((u0(i,j-1,k) + u0(i+1,j-1,k))**2 + w0(i,j-1,k+1)**2)**0.5
             us_at_scalar_plus = 0.5 * ((u0(i,j  ,k) + u0(i+1,j  ,k))**2 + w0(i,j  ,k+1)**2)**0.5
@@ -663,7 +663,7 @@ contains
                 write(6,*) 'positie ijk', i,j,k
                 stop 'tendency ging nan' ! SvdL, added for testiing
               endif
-              qtp (i,j,k)=(qtibm -qtm(i,j,k))*rk3coefi
+              if(lmoist) qtp (i,j,k)=(qtibm -qtm(i,j,k))*rk3coefi
               e12p(i,j,k)=(e12min-e12m(i,j,k))*rk3coefi
               do nc=1,nsv
                   svp(i,j,k,nc) = - svm(i,j,k,nc)*rk3coefi
@@ -677,7 +677,7 @@ contains
                 write(6,*) 'positie ijk', i,j,k
                 stop 'tendency ging nan' ! SvdL, added for testiing
               endif
-              qtp (i,j,k)=qtp (i,j,k)+tempqtp (i,j,k)
+              if(lmoist) qtp (i,j,k)=qtp (i,j,k)+tempqtp (i,j,k)
               do nc=1,nsv
                 svp (i,j,k,nc) = svp(i,j,k,nc) + tempsvp(i,j,k,nc)
               enddo

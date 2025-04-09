@@ -535,7 +535,7 @@ contains
               eomm = ( dzf(k-1) * ( ekm(i,j,k)  + ekm(i,j-1,k)  )  + &
                 dzf(k) * ( ekm(i,j,k-1) + ekm(i,j-1,k-1) ) ) / ( 4.  * dzh(k) )
 
-              u_at_w_min  = 0.25 * (u0(i,j-1,k-1)+v0(i,j-1,k)+u0(i+1,j-1,k-1)+u0(i+1,j-1,k) )
+              u_at_w_min  = 0.25 * (u0(i,j-1,k-1)+u0(i,j-1,k)+u0(i+1,j-1,k-1)+u0(i+1,j-1,k) ) !!<<<< TYPO HIER er staat v0 waar u0 hoort te staan
               u_at_w_plus = 0.25 * (u0(i,j  ,k-1)+u0(i,j  ,k)+u0(i+1,j  ,k-1)+u0(i+1,j  ,k) )
               call log_wallaw(w0(i,j-1,k),u_at_w_min ,Cm_ywall,tau_wv_min)
               call log_wallaw(w0(i,j  ,k),u_at_w_plus,Cm_ywall,tau_wv_plus)
@@ -545,7 +545,7 @@ contains
               eomp = ( dzf(k) * ( ekm(i,j,k+1)  + ekm(i,j-1,k+1)  )  + &
                 dzf(k+1) * ( ekm(i,j,k) + ekm(i,j-1,k) ) ) / ( 4.  * dzh(k+1) )
 
-              u_at_w_min  = 0.25 * (u0(i,j-1,k)+v0(i,j-1,k+1)+u0(i+1,j-1,k)+u0(i+1,j-1,k+1) )
+              u_at_w_min  = 0.25 * (u0(i,j-1,k)+u0(i,j-1,k+1)+u0(i+1,j-1,k)+u0(i+1,j-1,k+1) ) !!<<<< TYPO HIER er staat v0 waar u0 hoort te staan
               u_at_w_plus = 0.25 * (u0(i,j  ,k)+u0(i,j  ,k+1)+u0(i+1,j  ,k)+u0(i+1,j  ,k+1) )
               call log_wallaw(w0(i,j-1,k+1),u_at_w_min ,Cm_ywall,tau_wv_min)
               call log_wallaw(w0(i,j  ,k+1),u_at_w_plus,Cm_ywall,tau_wv_plus)
@@ -708,14 +708,14 @@ contains
     enddo
 
 
-    if(maxval(sqrt(u0**2.+v0**2.+w0**2.))>16) then
+    ! if(maxval(sqrt(u0**2.+v0**2.+w0**2.))>16) then
     !  maxlocx=maxloc(u0**2.+v0**2.+w0**2.)
     !  write(6,*) 'maxlocx = ',maxlocx(1),maxlocx(2),maxlocx(3)
     !  write(6,*) 'ERROR: vel>16, maxloc = ',maxloc(sqrt(u0**2.+v0**2.+w0**2.)), 'u0 and um and up are here:',u0(maxlocx(1),maxlocx(2),maxlocx(3)),um(maxlocx(1),maxlocx(2),maxlocx(3)),up(maxlocx(1),maxlocx(2),maxlocx(3))
     !  write(6,*) 'v0 and vm and vp are here:',v0(maxlocx(1),maxlocx(2),maxlocx(3)),vm(maxlocx(1),maxlocx(2),maxlocx(3)),vp(maxlocx(1),maxlocx(2),maxlocx(3))
     !  write(6,*) 'w0 and wm and wp are here:',w0(maxlocx(1),maxlocx(2),maxlocx(3)),wm(maxlocx(1),maxlocx(2),maxlocx(3)),wp(maxlocx(1),maxlocx(2),maxlocx(3))
     !  write(6,*) 'timee = ',timee
-    endif
+    ! endif
 
     !write (6,*) 'exit applyibm'
     return
@@ -769,7 +769,7 @@ contains
     return
   end subroutine zerowallvelocity
 
-
+  !! CHECK LATER NOG!!
   subroutine xwallscalar(i,j,k,a_in,a_out)
 
     use modglobal,      only : ih, i1, jh, j1, k1, dx2i
@@ -908,7 +908,6 @@ contains
     endif
   end subroutine xwalle12
 
-
   subroutine ywalle12(i,j,k)
 
     use modglobal,      only : dy2i, dx, dy, dzh
@@ -1010,7 +1009,7 @@ contains
     uspd = sqrt(u1**2 + u2**2)
     tau  = Cm_hor_wall * uspd * u1   !not a minus sign here but in the subroutine above, where it ensures force the direction of the wind
                                      !similar as michael who states "give tau the same sign as utan"
-!    write (6,*) 'u1,u2,dx_hor_half,Cm_hor_wall,tau',u1,u2,dx_hor_half,Cm_hor_wall,tau
+    !    write (6,*) 'u1,u2,dx_hor_half,Cm_hor_wall,tau',u1,u2,dx_hor_half,Cm_hor_wall,tau
     return
   end subroutine log_wallaw
 
@@ -1023,7 +1022,7 @@ contains
     real(field_r),intent(out) :: thlp
 
     thlp = Cd * us * (thlwall - thl) / dx
-!    write(6,*) 'us,thl,Cd,dx,thlp',us,thl,Cd,dx,thlp
+    !    write(6,*) 'us,thl,Cd,dx,thlp',us,thl,Cd,dx,thlp
 
     return
   end subroutine bulk_wall_temp

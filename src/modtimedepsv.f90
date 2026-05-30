@@ -59,7 +59,6 @@ contains
   subroutine inittimedepsv
     use modmpi,     only :myid,mpierr,comm3d,D_MPI_BCAST
     use modglobal,  only :cexpnr,kmax,k1,ifinput,runtime,nsv,ntimedep
-    use modtestbed, only :ltestbed,ntnudge
     
     implicit none
 
@@ -74,13 +73,8 @@ contains
 
     if (nsv==0 .or. .not.ltimedepsv ) return
 
-    if (ltestbed) then
-      kflux = ntnudge
-      kls   = ntnudge
-    else
-      kflux = ntimedep
-      kls   = ntimedep
-    end if
+    kflux = ntimedep
+    kls   = ntimedep
 
     allocate(height(k1))
     allocate(timesvsurf (0:kflux))

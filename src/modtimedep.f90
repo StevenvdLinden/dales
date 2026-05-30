@@ -79,11 +79,6 @@ contains
     use modsurfdata,only :ps,qts,wqsurf,wtsurf,thls, Qnetav
     use modtimedepsv, only : inittimedepsv
 
-    use modtestbed,        only : ltestbed,ntnudge,&
-                                  tb_time,tb_ps,tb_qts,tb_thls,tb_wqs,tb_wts,&
-                                  tb_w,tb_ug,tb_vg,&
-                                  tb_uadv,tb_vadv,tb_qtadv,tb_thladv,tb_Qnet
-
     implicit none
 
     character(len=*), parameter :: routine = modname//'/inittimedep'
@@ -96,13 +91,8 @@ contains
     real, allocatable, dimension (:) :: height
     if (.not. ltimedep) return
 
-    if (ltestbed) then
-      kflux = ntnudge
-      kls   = ntnudge
-    else
-      kflux = ntimedep
-      kls   = ntimedep
-    end if
+    kflux = ntimedep
+    kls   = ntimedep
 
     allocate(height   (k1))
 
@@ -170,111 +160,100 @@ contains
       timeflux = 0
       timels   = 0
 
-      if (ltestbed) then !ltestbed
-
-        write(*,*) 'inittimedep: testbed mode: data for time-dependent forcing obtained from scm_in.nc'
-
-        timeflux(1:kflux) = tb_time
-        timels  (1:kls  ) = tb_time
-
-        pst      = tb_ps
-        qtst     = tb_qts
-        thlst    = tb_thls
-        wqsurft  = tb_wqs
-        wtsurft  = tb_wts
-        Qnetavt  = tb_Qnet
-
-        height  (:) = zf
-        do t=1,kls
-          ugt      (:,t) = tb_ug    (t,:)
-          vgt      (:,t) = tb_vg    (t,:)
-          wflst    (:,t) = tb_w     (t,:)
-          dqtdxlst (:,t) = 0.
-          dqtdylst (:,t) = 0.
-          dqtdtlst (:,t) = tb_qtadv (t,:)
-          dthldtlst(:,t) = tb_thladv(t,:)
-          dudtlst  (:,t) = tb_uadv  (t,:)
-          dvdtlst  (:,t) = tb_vadv  (t,:)
-        end do
-
-      else !not testbed
-        if (iinput == input_netcdf) then
-          call init_timedep_from_netcdf('forcings.'//cexpnr//'.nc', height, timeflux(1:),kflux,kmax)
-          if (size(timeflux,dim=1) < ntimedep) then
-            call finish(routine, "Number of time points in forcings."//cexpnr//".nc is smaller than ntimedep = ", ntimedep)
-          end if
-          if(timeflux(1)>runtime) then
-            call warning(routine,'Time dependent forcings do not change before end of simulation. Disabling time dependent large scale forcings and surface fluxes')
-            ltimedepsurf=.false.
-            ltimedepz=.false.
-          endif
-          if (runtime > timeflux(kflux)) then
-            call finish(routine, "No time dependent data for end of run in forcings."//cexpnr//".nc, the last time point is ", timeflux(kflux), " but runtime is ", runtime)
-          end if
-          if (ntimedep == 1) then
-            call finish(routine, "Only one time point in forcings."//cexpnr//".nc, but ntimedep = ", ntimedep, " should be at least 2 to allow interpolation in time")
-          end if
-          timels = timeflux ! for netcdf input, the time points for surface fluxes and large scale forcings are the same
-        else ! not netcdf
-          open(ifinput,file='ls_flux.inp.'//cexpnr)
-          read(ifinput,'(a80)') chmess
-          write(6,*) chmess
-          read(ifinput,'(a80)') chmess
-          write(6,*) chmess
-          read(ifinput,'(a80)') chmess
-          write(6,*) chmess
-
-          timeflux = 0
-          timels   = 0
-
-
-          !--- load fluxes---
-          t    = 0
-          ierr = 0
-          do while (timeflux(t) < runtime)
-            t=t+1
-            if (t > kflux) then
-              call finish(routine, "Too many time points in file ", 'ls_flux.inp.'//cexpnr, ", the limit is kflux = ", kflux)
-            end if
-            read(ifinput,*, iostat = ierr) timeflux(t), wtsurft(t), wqsurft(t),thlst(t),qtst(t),pst(t)
-            write(*,'(i8,6e12.4)') t,timeflux(t), wtsurft(t), wqsurft(t),thlst(t),qtst(t),pst(t)
-            if (ierr < 0) then
-              call finish(routine, 'STOP: No time dependend data for end of run (surface fluxes)')
-            end if
-          end do
-          if(timeflux(1)>runtime) then
-          write(6,*) 'Time dependent surface variables do not change before end of'
-          write(6,*) 'simulation. --> only large scale forcings'
+      if (iinput == input_netcdf) then
+        call init_timedep_from_netcdf('forcings.'//cexpnr//'.nc', height, timeflux(1:),kflux,kmax)
+        if (size(timeflux,dim=1) < ntimedep) then
+          call finish(routine, "Number of time points in forcings."//cexpnr//".nc is smaller than ntimedep = ", ntimedep)
+        end if
+        if(timeflux(1)>runtime) then
+          call warning(routine,'Time dependent forcings do not change before end of simulation. Disabling time dependent large scale forcings and surface fluxes')
           ltimedepsurf=.false.
-          endif
-          ! flush to the end of fluxlist
-          do while (ierr ==0)
-            read (ifinput,*,iostat=ierr) dummyr
-          end do
-          backspace (ifinput)
+          ltimedepz=.false.
+        endif
+        if (runtime > timeflux(kflux)) then
+          call finish(routine, "No time dependent data for end of run in forcings."//cexpnr//".nc, the last time point is ", timeflux(kflux), " but runtime is ", runtime)
+        end if
+        if (ntimedep == 1) then
+          call finish(routine, "Only one time point in forcings."//cexpnr//".nc, but ntimedep = ", ntimedep, " should be at least 2 to allow interpolation in time")
+        end if
+        timels = timeflux ! for netcdf input, the time points for surface fluxes and large scale forcings are the same
+      else ! not netcdf
+        open(ifinput,file='ls_flux.inp.'//cexpnr)
+        read(ifinput,'(a80)') chmess
+        write(6,*) chmess
+        read(ifinput,'(a80)') chmess
+        write(6,*) chmess
+        read(ifinput,'(a80)') chmess
+        write(6,*) chmess
+
+        timeflux = 0
+        timels   = 0
 
 
-          !---load large scale forcings----
-          t = 0
-          do while (timels(t) < runtime)
-            t = t + 1
-            if (t > kls) then
-              call finish(routine, "Too many time points in file ", 'nudge.inp.'//cexpnr, ", the limit is kls = ", kls)
+        !--- load fluxes---
+        t    = 0
+        ierr = 0
+        do while (timeflux(t) < runtime)
+          t=t+1
+          if (t > kflux) then
+            call finish(routine, "Too many time points in file ", 'ls_flux.inp.'//cexpnr, ", the limit is kflux = ", kflux)
+          end if
+          read(ifinput,*, iostat = ierr) timeflux(t), wtsurft(t), wqsurft(t),thlst(t),qtst(t),pst(t)
+          write(*,'(i8,6e12.4)') t,timeflux(t), wtsurft(t), wqsurft(t),thlst(t),qtst(t),pst(t)
+          if (ierr < 0) then
+            call finish(routine, 'STOP: No time dependend data for end of run (surface fluxes)')
+          end if
+        end do
+        if(timeflux(1)>runtime) then
+        write(6,*) 'Time dependent surface variables do not change before end of'
+        write(6,*) 'simulation. --> only large scale forcings'
+        ltimedepsurf=.false.
+        endif
+        ! flush to the end of fluxlist
+        do while (ierr ==0)
+          read (ifinput,*,iostat=ierr) dummyr
+        end do
+        backspace (ifinput)
+
+
+        !---load large scale forcings----
+        t = 0
+        do while (timels(t) < runtime)
+          t = t + 1
+          if (t > kls) then
+            call finish(routine, "Too many time points in file ", 'nudge.inp.'//cexpnr, ", the limit is kls = ", kls)
+          end if
+          chmess1 = "#"
+          ierr = 1 ! not zero
+          do while (.not.(chmess1 == "#" .and. ierr ==0)) !search for the next line consisting of "# time", from there onwards the profiles will be read
+            read(ifinput,*,iostat=ierr) chmess1,timels(t)
+            if (ierr < 0) then
+              call finish(routine, 'STOP: No time dependend data for end of run')
             end if
-            chmess1 = "#"
-            ierr = 1 ! not zero
-            do while (.not.(chmess1 == "#" .and. ierr ==0)) !search for the next line consisting of "# time", from there onwards the profiles will be read
-              read(ifinput,*,iostat=ierr) chmess1,timels(t)
-              if (ierr < 0) then
-                call finish(routine, 'STOP: No time dependend data for end of run')
-              end if
+          end do
+
+
+          if (ltimedepuv) then
+            ! new, optional format with u,v in ls_flux.inp.*
+            do k=1,kmax
+                read (ifinput,*) &
+                    height  (k)  , &
+                    ugt     (k,t), &
+                    vgt     (k,t), &
+                    wflst   (k,t), &
+                    dqtdxlst(k,t), &
+                    dqtdylst(k,t), &
+                    dqtdtlst(k,t), &
+                    thlpcart(k,t), &
+                    dudtlst (k,t), &
+                    dvdtlst (k,t)
             end do
-
-
-            if (ltimedepuv) then
-              ! new, optional format with u,v in ls_flux.inp.*
+          else
+            ! if lcoriol, read in 2nd and 3rd column as ug and vg
+            if (lcoriol) then
+              ! old format without u,v in ls_flux.inp.*  (default)
               do k=1,kmax
-                  read (ifinput,*) &
+                read (ifinput,*) &
                       height  (k)  , &
                       ugt     (k,t), &
                       vgt     (k,t), &
@@ -282,47 +261,28 @@ contains
                       dqtdxlst(k,t), &
                       dqtdylst(k,t), &
                       dqtdtlst(k,t), &
-                      thlpcart(k,t), &
-                      dudtlst (k,t), &
-                      dvdtlst (k,t)
+                      thlpcart(k,t)
               end do
-            else
-              ! if lcoriol, read in 2nd and 3rd column as ug and vg
-              if (lcoriol) then
-                ! old format without u,v in ls_flux.inp.*  (default)
+            else ! else read in same columns as dpdx and dpdy
                 do k=1,kmax
                   read (ifinput,*) &
                         height  (k)  , &
-                        ugt     (k,t), &
-                        vgt     (k,t), &
+                        dpdxlt  (k,t), &
+                        dpdylt  (k,t), &
                         wflst   (k,t), &
                         dqtdxlst(k,t), &
                         dqtdylst(k,t), &
                         dqtdtlst(k,t), &
                         thlpcart(k,t)
                 end do
-              else ! else read in same columns as dpdx and dpdy
-                  do k=1,kmax
-                    read (ifinput,*) &
-                          height  (k)  , &
-                          dpdxlt  (k,t), &
-                          dpdylt  (k,t), &
-                          wflst   (k,t), &
-                          dqtdxlst(k,t), &
-                          dqtdylst(k,t), &
-                          dqtdtlst(k,t), &
-                          thlpcart(k,t)
-                  end do
-              end if
-
-
             end if
-          end do
 
-          close(ifinput)
-        end if ! iinput ascii or netcdf
 
-      end if   !ltestbed
+          end if
+        end do
+
+        close(ifinput)
+      end if ! iinput ascii or netcdf
 
 !      do k=kmax,1,-1
 !        write (6,'(3f7.1,5e12.4)') &

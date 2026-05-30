@@ -95,7 +95,6 @@ contains
                                   timerad,rka,dlwtop,dlwbot,sw0,gc,reff,isvsmoke,lcloudshading
     use modtimedep,        only : inittimedep,ltimedep,ltimedepuv
     use modtimedepsv,      only : inittimedepsv,ltimedepsv
-    use modtestbed,        only : inittestbed
     use modboundary,       only : initboundary,ksp
     use modthermodynamics, only : initthermodynamics
     use modmicrophysics,   only : initmicrophysics
@@ -331,7 +330,6 @@ contains
     call initmicrophysics
     call initspraying
     call allocate_tracers ! At this point, all tracers have to be defined
-    call inittestbed    !reads initial profiles from scm_in.nc, to be used in readinitfiles
     call inittstep
 
     call initibm ! keep here as it may overwrite ibas_prf
@@ -519,8 +517,6 @@ contains
     use modibm,            only : fluid_mask
     use modibmdata,        only : thlibm, qtibm, lapply_ibm
 
-    use modtestbed,        only : ltestbed,tb_ps,tb_thl,tb_qt,tb_u,tb_v,tb_w,tb_ug,tb_vg,&
-                                  tb_dqtdxls,tb_dqtdyls,tb_qtadv,tb_thladv
     use modopenboundary,   only : openboundary_ghost,openboundary_readboundary,openboundary_initfields
     use modtracers,        only : tracer_prop, tracer_profs_from_netcdf, nsv_user
     use utils,             only : to_lower
@@ -571,22 +567,7 @@ contains
       timee = 0
       if (myid==0) then
 
-        if (ltestbed) then
-
-          write(*,*) 'readinitfiles: testbed mode: profiles for initialization obtained from scm_in.nc'
-
-          do k=1,kmax
-            height (k) = zf(k)
-            thlprof(k) = tb_thl(1,k)
-            qtprof (k) = tb_qt(1,k)
-            uprof  (k) = tb_u(1,k)
-            vprof  (k) = tb_v(1,k)
-            e12prof(k) = e12min
-          end do
-
-          ps         = tb_ps(1)
-
-        else if (iinput == input_netcdf) then
+        if (iinput == input_netcdf) then
           call init_from_netcdf('init.'//cexpnr//'.nc', height, uprof, vprof, &
                                 thlprof, qtprof, e12prof, ug, vg, dpdxl, dpdyl, wfls, &
                                 dqtdxls, dqtdyls, dqtdtls, thlpcar, kmax)
@@ -614,7 +595,7 @@ contains
           end do
 
           close(ifinput)
-        end if   !ltestbed
+        end if
 
         write(profile_output,*) 'height    thl      qt         u      v     e12'
         do k = kmax, 1, -1
@@ -1031,64 +1012,45 @@ contains
 !-----------------------------------------------------------------
 
 
-    if(myid==0)then
+    if (myid==0) then
 
-      if (ltestbed) then
-
-          write(*,*) 'readinitfiles: testbed mode: profiles for ls forcing obtained from scm_in.nc'
-
-          do k=1,kmax
-            height (k) = zf(k)
-            ug     (k) = tb_ug(1,k)
-            vg     (k) = tb_vg(1,k)
-            wfls   (k) = tb_w(1,k)
-            dqtdxls(k) = tb_dqtdxls(1,k)
-            dqtdyls(k) = tb_dqtdyls(1,k)
-            dqtdtls(k) = tb_qtadv(1,k)
-            thlpcar(k) = tb_thladv(1,k)
-          end do
-
+      if (iinput == input_netcdf) then
+        continue ! Profiles have been read by init_from_netcdf
       else
-
-        if (iinput == input_netcdf) then
-          continue ! Profiles have been read by init_from_netcdf
-        else
-          open (ifinput,file='lscale.inp.'//cexpnr, status='old',iostat=ierr)
-          if (ierr /= 0) then
-             call finish(routine,'Cannot open the file ', 'lscale.inp.'//cexpnr)
-          end if
-          read (ifinput,'(a80)') chmess
-          read (ifinput,'(a80)') chmess
-
-          ! if coriolis force, read in 2nd and 3rd columns as ug and vg
-          if (lcoriol) then
-            do  k=1,kmax
-              read (ifinput,*) &
-                  height (k), &
-                  ug     (k), &
-                  vg     (k), &
-                  wfls   (k), &
-                  dqtdxls(k), &
-                  dqtdyls(k), &
-                  dqtdtls(k), &
-                  thlpcar(k)
-            end do
-          else ! otherwhise read in same columns as pressure gradient
-            do  k=1,kmax
-              read (ifinput,*) &
-                  height (k), &
-                  dpdxl  (k), &
-                  dpdyl  (k), &
-                  wfls   (k), &
-                  dqtdxls(k), &
-                  dqtdyls(k), &
-                  dqtdtls(k), &
-                  thlpcar(k)
-            end do
-          end if
-          close(ifinput)
+        open (ifinput,file='lscale.inp.'//cexpnr, status='old',iostat=ierr)
+        if (ierr /= 0) then
+            call finish(routine,'Cannot open the file ', 'lscale.inp.'//cexpnr)
         end if
+        read (ifinput,'(a80)') chmess
+        read (ifinput,'(a80)') chmess
 
+        ! if coriolis force, read in 2nd and 3rd columns as ug and vg
+        if (lcoriol) then
+          do  k=1,kmax
+            read (ifinput,*) &
+                height (k), &
+                ug     (k), &
+                vg     (k), &
+                wfls   (k), &
+                dqtdxls(k), &
+                dqtdyls(k), &
+                dqtdtls(k), &
+                thlpcar(k)
+          end do
+        else ! otherwhise read in same columns as pressure gradient
+          do  k=1,kmax
+            read (ifinput,*) &
+                height (k), &
+                dpdxl  (k), &
+                dpdyl  (k), &
+                wfls   (k), &
+                dqtdxls(k), &
+                dqtdyls(k), &
+                dqtdtls(k), &
+                thlpcar(k)
+          end do
+        end if
+        close(ifinput)
       end if
 
       if (lcoriol) then

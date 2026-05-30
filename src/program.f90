@@ -156,7 +156,6 @@ program DALES
   !use modparticles,    only : initparticles, particles, exitparticles
   use modnudge,        only : initnudge, nudge, exitnudge
   use modnudgeboundary, only : initnudgeboundary, nudgeboundary, exitnudgeboundary
-  use modtestbed,      only : testbednudge, exittestbed
   !use modprojection,   only : initprojection, projection
   use modchem,         only : initchem,twostep
   use modcanopy,       only : initcanopy, canopy, exitcanopy
@@ -324,7 +323,6 @@ program DALES
     !------------------------------------------------------
         call nudge
         call nudgeboundary
-        call testbednudge
         if (simid == turid) call spraying
     !    call dospecs
     !    call tiltedgravity
@@ -445,7 +443,6 @@ program DALES
   !call exitparticles
   call exitnudge
   call exitnudgeboundary
-  call exittestbed
   call exitsampling
   call exitquadrant
   call exitsamptend

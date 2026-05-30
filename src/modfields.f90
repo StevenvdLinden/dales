@@ -61,9 +61,6 @@ save
   real(field_r), allocatable :: rhobf(:)       !<   Base state density, full level
   real(field_r), allocatable :: rhobh(:)       !<   Base state density, half level
 
-  real(field_r), allocatable :: drhobdzf(:)       !<   Base state density, derivative at full level
-  real(field_r), allocatable :: drhobdzh(:)       !<   Base state density, derivative at half level
-
   ! Cloud edge variables
   real(field_r), allocatable :: ql0(:,:,:)  !<   liquid water content
   real(field_r), allocatable :: tmp0(:,:,:) !<   temperature at full level
@@ -171,8 +168,6 @@ subroutine initfields
     ! Allocation of base state variables
     allocate(rhobf   (k1))
     allocate(rhobh   (k1))
-    allocate(drhobdzf(k1))
-    allocate(drhobdzh(k1))
 
     ! Allocation of diagnostic variables
     allocate(ql0   (2-ih:i1+ih,2-jh:j1+jh,k1))
@@ -241,7 +236,7 @@ subroutine initfields
     qtm=0.;qt0=0.;qtp=0.
     e12m=0.;e120=0.;e12p=0.
 
-    rhobf=0.;rhobh=0.;drhobdzf=0.;drhobdzh=0.
+    rhobf=0.;rhobh=0.
     ql0=0.;tmp0=0.;ql0h=0.;thv0h=0.;thl0h=0.;qt0h=0.
     presf=0.;presh=0.;exnf=0.;exnh=0.;thvh=0.;thvf=0.;rhof=0.    ! OG
     qt0av=0.;ql0av=0.;thl0av=0.;u0av=0.;v0av=0.;
@@ -290,7 +285,6 @@ subroutine initfields
     deallocate(um,vm,wm,thlm,e12m,qtm,u0,v0,w0,thl0,thl0h,qt0h,e120,qt0)
     deallocate(up,vp,wp,thlp,e12p,qtp)
     deallocate(rhobf,rhobh)
-    deallocate(drhobdzf,drhobdzh)
     deallocate(ql0,tmp0,ql0h,thv0h,dthvdz,whls,presf,presh,initial_presf,initial_presh,exnf,exnh,thvh,thvf,rhof,qt0av,ql0av,thl0av,u0av,v0av)
     deallocate(ug,vg,dpdxl,dpdyl,wfls)
     deallocate(dthldxls,dthldyls,dthldtls,dqtdxls,dqtdyls,dqtdtls)

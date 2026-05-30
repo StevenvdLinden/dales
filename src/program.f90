@@ -58,7 +58,6 @@
 !! - Consistent notation of theta_v in output
 !! - Radiation negative qt crash
 !! - Integrate WENO advection (Johan)
-!! - Removed tqaver
 !! - Subsidence with local values
 !! - top boundary conditions (thl,qt-gradients) time-dependent
 !! \par todo (this release)
@@ -104,7 +103,7 @@ program DALES
   use modmpi,            only : initmpicomm
   use modstartup,        only : startup, writerestartfiles,testwctime,exitmodules
   use modtimedep,        only : timedep
-  use modboundary,       only : boundary, grwdamp! JvdD ,tqaver
+  use modboundary,       only : boundary, grwdamp
   use modthermodynamics, only : thermodynamics
   use modmicrophysics,   only : microphysics
   use modsurface,        only : surface
@@ -335,7 +334,6 @@ program DALES
     !   3.7  PRESSURE FLUCTUATIONS, TIME INTEGRATION AND BOUNDARY CONDITIONS
     !-----------------------------------------------------------------------
         call grwdamp !damping at top of the model
-    !JvdD    call tqaver !set thl, qt and sv(n) equal to slab average at level kmax
         call samptend(tend_topbound)
     
         ! either apply ibm before or after poisson solver

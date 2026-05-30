@@ -427,7 +427,7 @@ module daleslib
             !!----------------------------------------------------------------
             use modstartup,         only : writerestartfiles
             use modtimedep,         only : timedep
-            use modboundary,        only : boundary, grwdamp! JvdD ,tqaver
+            use modboundary,        only : boundary, grwdamp
             use modthermodynamics,  only : thermodynamics
             use modmicrophysics,    only : microphysics
             use modsurface,         only : surface
@@ -539,7 +539,6 @@ module daleslib
             !   3.5  PRESSURE FLUCTUATIONS, TIME INTEGRATION AND BOUNDARY CONDITIONS
             !-----------------------------------------------------------------------
             call grwdamp !damping at top of the model
-            !JvdD    call tqaver !set thl, qt and sv(n) equal to slab average at level kmax
             call samptend(tend_topbound)
             call poisson
             call check_tend('after poisson')

@@ -263,7 +263,6 @@ contains
 
   ! Additional to gravity wave damping, set qt, thl and sv0(:) equal to slabaverage
   ! at level kmax.
-  ! Originally done in subroutine tqaver, now using averages from modthermodynamics
 
   if ( .not. lopenbc ) then
     !$acc kernels default(present) async(1)
@@ -375,54 +374,5 @@ contains
 
   return
   end subroutine topm
-
-!!>Set thl, qt and sv(n) equal to slab average at level kmax
-! Functionality added to subroutine 'grwdamp' !JvdD
-!
-!  subroutine tqaver
-!
-!  use modmpi,    only : comm3d,mpierr,my_real, mpi_sum
-!  use modglobal, only : i1,j1,kmax,nsv,ijtot
-!  use modfields, only : thl0,qt0,sv0
-!  implicit none
-!
-!  real thl0a, qt0a
-!  real thl0al, qt0al
-!  integer n
-!  real,allocatable, dimension(:) :: sv0al, sv0a
-!  allocate (sv0al(nsv),sv0a(nsv))
-!
-!  thl0al=sum(thl0(2:i1,2:j1,kmax))
-!  qt0al =sum(qt0(2:i1,2:j1,kmax))
-!
-!  do n=1,nsv
-!    sv0al(n) = sum(sv0(2:i1,2:j1,kmax,n))
-!  enddo
-!
-!  call MPI_ALLREDUCE(thl0al, thl0a, 1,    MY_REAL, &
-!                         MPI_SUM, comm3d,mpierr)
-!  call MPI_ALLREDUCE(qt0al, qt0a , 1,     MY_REAL, &
-!                         MPI_SUM, comm3d,mpierr)
-!  if(nsv > 0) then
-!    call MPI_ALLREDUCE(sv0al, sv0a , nsv,   MY_REAL, &
-!                           MPI_SUM, comm3d,mpierr)
-!  end if
-!
-!
-!  thl0a=thl0a/ijtot
-!  qt0a =qt0a/ijtot
-!  sv0a = sv0a/ijtot
-!
-!  thl0(2:i1,2:j1,kmax)=thl0a
-!  qt0(2:i1,2:j1,kmax) =qt0a
-!  do n=1,nsv
-!    sv0(2:i1,2:j1,kmax,n) = sv0a(n)
-!  enddo
-!  deallocate (sv0al,sv0a)
-!
-!  return
-!  end subroutine tqaver
-
-
 
 end module

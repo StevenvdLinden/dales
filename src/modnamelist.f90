@@ -3,10 +3,14 @@ module modnamelist
 
   use modaerosol,        only: aerosol_read_namelist
   use modchecksim,       only: checksim_read_namelist
+  use modcloudstat,      only: cloudstat_read_namelist
+  use modcrosssection,   only: crosssection_read_namelist
+  use modfielddump,      only: fielddump_read_namelist
   use modlatsponge,      only: lateral_sponge_read_namelist
   use modmicrophysics,   only: microphysics_read_namelist
   use modpois,           only: poisson_solver_read_namelist
   use modprecursor,      only: precursor_read_namelist
+  use modradfield,       only: radfield_read_namelist
   use modspraying,       only: spraying_read_namelist
   use modsurface,        only: surface_read_namelist
   use modibm,            only: ibm_read_namelist
@@ -41,6 +45,12 @@ contains
     call ibm_read_namelist(nml_filename)
     call precursor_read_namelist(nml_filename)
     call spraying_read_namelist(nml_filename)
+
+    ! Statistical modules
+    call cloudstat_read_namelist(nml_filename)
+    call crosssection_read_namelist(nml_filename)
+    call fielddump_read_namelist(nml_filename)
+    call radfield_read_namelist(nml_filename)
   
   end subroutine read_namelists
 

@@ -122,7 +122,7 @@ program DALES
 !     0.1     USE STATEMENTS FOR ADDONS STATISTICAL ROUTINES
 !----------------------------------------------------------------
   use modscalarpulse,  only : initscalarpulse, scalarpulse
-  use modcape,         only : initcape,exitcape,docape
+  use modcape,         only : initcape,docape
   use modchecksim,     only : initchecksim, checksim
   use modstat_nc,      only : initstat_nc
   !use modspectra2,     only : dospecs,initspectra2,tanhfilter
@@ -133,13 +133,14 @@ program DALES
   !use moddepstat,      only : initdepstat ,depstat, exitdepstat
   use modsampling,     only : initsampling, sampling,exitsampling
   use modquadrant,     only : initquadrant, quadrant,exitquadrant
-  use modcrosssection, only : initcrosssection, crosssection,exitcrosssection
+  use modcrosssection, only : initcrosssection, crosssection
   use modAGScross,     only : initAGScross, AGScross,exitAGScross
-  use modlsmcrosssection, only : initlsmcrosssection, lsmcrosssection,exitlsmcrosssection
+  use modlsmcrosssection, only : initlsmcrosssection, lsmcrosssection
+  use modslurbcrosssection, only : initslurbcrosssection, slurbcrosssection
   use moddepcrosssection, only : initdepcrosssection, depcrosssection,exitdepcrosssection
   use modcloudfield,   only : initcloudfield, cloudfield
-  use modfielddump,    only : initfielddump, fielddump,exitfielddump
-  use modradfield,     only : initradfield, radfield, exitradfield
+  use modfielddump,    only : initfielddump, fielddump
+  use modradfield,     only : initradfield, radfield
   use modsamptend,     only : initsamptend, samptend,exitsamptend, tend_start,tend_subg,tend_force,&
                               tend_rad,tend_ls,tend_micro, tend_topbound,tend_pois,tend_addon, tend_coriolis,&
                               leibniztend, writesamptend
@@ -171,6 +172,8 @@ program DALES
   use modprecursor,    only : init_precursor, precursor_nudge_boundary, &
                               swap_fields, exit_precursor, &
                               lprecursor, Nsim, statid, turid, refid
+  use modcloudstat,    only: init_cloudstat, do_cloudstat
+  use modstat_nc_files, only: stats_limit_timestep, init_output_files, write_output_files, close_output_files
 !----------------------------------------------------------------
 !     0.2     USE STATEMENTS FOR TIMER MODULE
 !----------------------------------------------------------------
@@ -211,6 +214,7 @@ program DALES
   call initcrosssection
   call initAGScross
   call initlsmcrosssection
+  call initslurbcrosssection
   call initdepcrosssection
   !call initprojection
   call initcloudfield
@@ -234,6 +238,7 @@ program DALES
   !call initspectra2
   call initscalarpulse
   call initcape
+  call init_cloudstat
 
   call init_profiles
   call init_precursor
@@ -241,6 +246,9 @@ program DALES
 #if defined(_OPENACC)
   call update_gpu
 #endif
+
+  ! Initialize IO
+  call init_output_files
 
 !------------------------------------------------------
 !   3.0   MAIN TIME LOOP
@@ -367,6 +375,7 @@ program DALES
     !   3.9  WRITE RESTARTFILES AND DO STATISTICS
     !------------------------------------------------------
         if (simid == statid) then
+          call stats_limit_timestep
           call twostep
           !call coldedge
           call checksim
@@ -381,6 +390,7 @@ program DALES
           call crosssection
           call AGScross
           call lsmcrosssection
+          call slurbcrosssection
           call depcrosssection
           !call tanhfilter
           call docape
@@ -389,6 +399,8 @@ program DALES
           call fielddump
           call radfield
           !call particles
+
+          call do_cloudstat
     
           call budgetstat
           call varbudget
@@ -398,6 +410,8 @@ program DALES
     
           call testwctime
           call writerestartfiles
+
+          call write_output_files
         end if
 
         call reset_tendencies
@@ -439,17 +453,13 @@ program DALES
   call exitvarbudget
   call exitmsebudg
   !call exitstressbudget
-  call exitcrosssection
   call exitAGScross
-  call exitlsmcrosssection
   call exitdepcrosssection
-  call exitcape
-  call exitfielddump
-  call exitradfield
   call exitheterostats
   call exitcanopy
   call exittimestat
   call exitnudgeboundary  !cstep
+  call close_output_files
   call exitmodules
   call exit_profiles
   call exitlogging

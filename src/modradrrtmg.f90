@@ -697,6 +697,10 @@ contains
         ! but we need to allow modslurb to initialize to get the emissivity...
         emis      (im,:) = emissivity(i,j)
         do k=1,kmax
+          ! Surface emissivity for all bands set from modsurface.
+          ! Currently this is calculated every radiation call, want to move this to initradiation ideally,
+          ! but we need to allow modslurb to initialize to get the emissivity...
+           emis      (im,k) = emissivity(i,j)
 
            qv_slice  (im,k) = max(qt0(i,j,k) - ql0(i,j,k),1e-18_field_r) !avoid RRTMG reading negative initial values
 

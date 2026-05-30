@@ -33,6 +33,7 @@ set( dales_srcs
 	modchecksim.f90
 	modchem.f90
 	modcloudfield.f90
+	modcloudstat.f90
 	modcrosssection.f90
 	modcufft.f90
 	moddatetime.f90
@@ -63,6 +64,7 @@ set( dales_srcs
 	modslurb/modslurbdata.f90
 	modslurb/modslurb_energybalance.f90
 	modslurb/modslurb_radiationmodel.f90
+	modslurb/modslurbcrosssection.f90
 	modslurb/modslurbhelpers.f90
 	modslurb/modslurbresistance_stability.f90
 	modmicrodata.f90
@@ -74,6 +76,7 @@ set( dales_srcs
 	modmsebudg.f90
 	modnamelist.f90
 	modnetcdf.f90
+	modnetcdf_file_t.f90
 	modnudge.f90
 	modnudgeboundary.f90
 	modnvtx.f90
@@ -103,6 +106,7 @@ set( dales_srcs
 	modsprayingdata.f90
 	modstartup.f90
 	modstat_nc.f90
+	modstat_nc_files.f90
 	modstat_profiles.f90
 	modstattend.f90
 	modsubgrid.f90

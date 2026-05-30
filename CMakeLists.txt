@@ -49,11 +49,19 @@ ecbuild_add_option( FEATURE RRTMG
                     DESCRIPTION "Build with legacy RRTMG libraries"
                     ADVANCED DEFAULT ON )
 
+ecbuild_add_option( FEATURE NETCDF_DEBUG_ERRORS
+                    DESCRIPTION "Build with print statements on netCDF errors"
+                    ADVANCED DEFAULT OFF )
+
 # Check for required dependencies
 
 ecbuild_find_package( NetCDF REQUIRED COMPONENTS Fortran C )
 
 ecbuild_find_package( MPI REQUIRED COMPONENTS Fortran )
+
+# Check if the NetCDF library supports parallel operations
+include( dales_query_parallel_netcdf )
+dales_query_parallel_netcdf()
 
 # Set precision
 
@@ -94,6 +102,10 @@ endif()
 
 if( ENABLE_RRTMG )
   add_compile_definitions( USE_RRTMG )
+endif()
+
+if( ENABLE_NETCDF_DEBUG_ERRORS )
+  add_compile_definitions( USE_NETCDF_DEBUG_ERRORS )
 endif()
 
 # GPU stuff

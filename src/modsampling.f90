@@ -65,7 +65,7 @@ contains
   subroutine initsampling
     use modmpi,    only : comm3d,mpierr,myid,D_MPI_BCAST
     use modglobal, only : ladaptive, dtmax,k1,ifnamopt,fname_options,kmax,   &
-                          btime,tres,cexpnr,lwarmstart,checknamelisterror
+                          btime,tres,cexpnr,checknamelisterror
     use modstat_nc, only : define_nc,ncinfo,open_nc,define_nc,ncinfo,nctiminfo,writestat_dims_nc
     use modtracers, only : get_tracer_index
     use fortran_support, only: nnml_output

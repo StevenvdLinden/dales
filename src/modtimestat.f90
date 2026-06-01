@@ -90,7 +90,7 @@ contains
   subroutine inittimestat
     use modmpi,    only : myid,comm3d,mpierr,D_MPI_BCAST
     use modglobal, only : ifnamopt, fname_options,cexpnr,dtmax,ifoutput,dtav_glob,tres,&
-                          ladaptive,k1,kmax,rd,rv,dt_lim,btime,i1,j1,lwarmstart,checknamelisterror, &
+                          ladaptive,k1,kmax,rd,rv,dt_lim,btime,i1,j1,checknamelisterror, &
                           ih ,jh
     use modfields, only : thlprof,qtprof,svprof
     use modsurfdata, only : isurf, lhetero, xpatches, ypatches

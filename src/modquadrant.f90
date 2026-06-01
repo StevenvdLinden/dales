@@ -65,7 +65,7 @@ contains
   subroutine initquadrant
     use modmpi,    only : comm3d,mpierr,myid,D_MPI_BCAST
     use modglobal, only : ladaptive, dtmax,ifnamopt,fname_options,kmax,   &
-                           dtav_glob,btime,tres,cexpnr,nsv,lwarmstart,checknamelisterror
+                           dtav_glob,btime,tres,cexpnr,nsv,checknamelisterror
     use modstat_nc, only : define_nc,ncinfo,open_nc,define_nc,ncinfo,nctiminfo,writestat_dims_q_nc
     use fortran_support, only: nnml_output
     implicit none

@@ -191,7 +191,7 @@ contains
     use modmpi, only : myid,mpierr, comm3d, D_MPI_BCAST
     use modglobal, only : i1, ih, j1, jh, kmax, k1, nsv, ifnamopt, fname_options, &
                           cexpnr, dtav_glob, timeav_glob, dt_lim, btime, tres, &
-                          lwarmstart, checknamelisterror
+                          checknamelisterror
     use modstat_nc, only : open_nc, ncinfo, define_nc, nctiminfo, writestat_dims_nc
     use modsurfdata, only : isurf, ksoilmax
     use modlsm, only : kmax_soil

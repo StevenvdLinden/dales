@@ -56,7 +56,7 @@ contains
 subroutine initstattend
     use modmpi,   only : mpierr,comm3d,myid,D_MPI_BCAST
     use modglobal,only : cexpnr,dtmax,ifnamopt,fname_options,k1,dtav_glob,timeav_glob,&
-    ladaptive, dt_lim,btime,tres,lwarmstart,checknamelisterror
+    ladaptive, dt_lim,btime,tres,checknamelisterror
     use modstat_nc, only : open_nc,define_nc,ncinfo,nctiminfo,writestat_dims_nc
     use modgenstat, only : ncid_prof=>ncid
     use fortran_support, only: nnml_output

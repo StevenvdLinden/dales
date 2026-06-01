@@ -76,15 +76,14 @@ module modbudget
   logical :: lsbtkeb   !Switch to tell if the sbtke at beg of av periode has been stored
 
 contains
-!> Initialization routine, reads namelists and inits variables
+  !> Initialization routine, reads namelists and inits variables
   subroutine initbudget
     use modmpi,    only : myid,mpierr, comm3d, D_MPI_BCAST
     use modglobal, only : dtmax,k1,ifnamopt,fname_options,cexpnr,dtav_glob,timeav_glob,&
-    ladaptive,dt_lim,btime,tres,lwarmstart,checknamelisterror
+    ladaptive,dt_lim,btime,tres,checknamelisterror
     use modstat_nc, only : define_nc,ncinfo,writestat_dims_nc
     use fortran_support, only: nnml_output
     use modgenstat, only : idtav_prof=>idtav, itimeav_prof=>itimeav,ncid_prof=>ncid
-
 
     implicit none
     character(len=*), parameter :: routine = modname//'/initbudget'

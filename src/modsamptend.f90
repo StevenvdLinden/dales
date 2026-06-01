@@ -64,7 +64,6 @@ subroutine initsamptend
     use modmpi,   only : myid
     use modglobal,only : dtmax,k1,ladaptive,&
                          btime,tres,j1,jh,i1,ih
-    use modstat_nc, only : lnetcdf
 
     implicit none
 
@@ -105,7 +104,6 @@ subroutine initsamptend
     end if
 
     if(isamptot < 1) return
-    if(.not.(lnetcdf)) return !only in netcdf at the moment
 
     idtav = int(dtav / tres, kind=kind(idtav))
     itimeav = int(timeav / tres, kind=kind(itimeav))
@@ -201,15 +199,13 @@ subroutine initsamptend
     nrsamplast=0
     nrsampnew=0
 
-    if (lnetcdf) then
-      if (lprocblock) then
-        ! Each block writes its own budget to its own file
+    if (lprocblock) then
+      ! Each block writes its own budget to its own file
+      call initnetcdf()
+    else
+      ! We average over all blocks and write to a single file
+      if (myid==0) then
         call initnetcdf()
-      else
-        ! We average over all blocks and write to a single file
-        if (myid==0) then
-          call initnetcdf()
-        end if
       end if
     end if
 
@@ -534,7 +530,6 @@ subroutine initsamptend
                           cp,rv,rlv,rd,&
                           timee,rk3step,dt_lim,ijtot,nsv,rdt
     use modfields, only : up,vp,wp,thlp,qtp,svp,w0,thl0,ql0,exnf,qt0,u0,v0,sv0
-    use modstat_nc, only : lnetcdf
     use modchecksim, only: lchecktend, checktend
     use modtracers, only : get_tracer_index
     implicit none
@@ -550,7 +545,7 @@ subroutine initsamptend
 
     if (.not. lsamptend) return
     if(isamptot < 1) return
-    if(.not.(lnetcdf)) return !only in netcdf at the moment
+
     if (rk3step/=3) return
     if(timee<tnext) then
       dt_lim = minval((/dt_lim,tnext-timee,tnextwrite-timee/))
@@ -1227,7 +1222,6 @@ subroutine initsamptend
   subroutine writesamptend
     use modglobal, only : k1
     use modmpi,    only : myid,comm3d,mpierr,mpi_sum,D_MPI_ALLREDUCE
-    use modstat_nc, only: lnetcdf
     implicit none
     integer :: field,k
 
@@ -1334,15 +1328,13 @@ subroutine initsamptend
       enddo
     end if
 
-    if (lnetcdf) then
-      if (lprocblock) then
-        ! Each block writes its own budget to its own file
-        call writenetcdf_proc()
-      else
-        ! We have averaged over all blocks and write to a single file
-        if (myid==0) then
-          call writenetcdf()
-        end if
+    if (lprocblock) then
+      ! Each block writes its own budget to its own file
+      call writenetcdf_proc()
+    else
+      ! We have averaged over all blocks and write to a single file
+      if (myid==0) then
+        call writenetcdf()
       end if
     end if
 
@@ -1705,15 +1697,14 @@ subroutine initsamptend
   end subroutine writenetcdf_proc
 
 
-!> Cleans up after the run
+  !> Cleans up after the run
   subroutine exitsamptend
-    use modstat_nc, only: exitstat_nc,lnetcdf
+    use modstat_nc, only: exitstat_nc
     use modmpi, only: myid
   implicit none
 
     if (.not. lsamptend) return
     if(isamptot == 0) return
-    if(.not.(lnetcdf)) return
 
     if (lprocblock) then
        ! Each block writes its own budget to its own file

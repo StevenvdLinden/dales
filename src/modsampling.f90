@@ -65,8 +65,8 @@ contains
   subroutine initsampling
     use modmpi,    only : comm3d,mpierr,myid,D_MPI_BCAST
     use modglobal, only : ladaptive, dtmax,k1,ifnamopt,fname_options,kmax,   &
-                          btime,tres,cexpnr,ifoutput,lwarmstart,checknamelisterror
-    use modstat_nc, only : lnetcdf,define_nc,ncinfo,open_nc,define_nc,ncinfo,nctiminfo,writestat_dims_nc
+                          btime,tres,cexpnr,lwarmstart,checknamelisterror
+    use modstat_nc, only : define_nc,ncinfo,open_nc,define_nc,ncinfo,nctiminfo,writestat_dims_nc
     use modtracers, only : get_tracer_index
     use fortran_support, only: nnml_output
 !     use modgenstat, only : idtav_prof=>idtav, itimeav_prof=>itimeav
@@ -79,8 +79,6 @@ contains
     namelist/NAMSAMPLING/ &
     dtav,timeav,lsampcl,lsampco,lsampup,lsampbuup,lsampcldup,lsamptend,lprocblock,ltenddec,ltendleib, &
     lsamptendu,lsamptendv,lsamptendw,lsamptendthl,lsamptendqt,lsamptendqr,lsamptendnr, lqlflux
-
-!     dtav=dtav_glob;timeav=timeav_glob
 
     if(myid==0)then
       open(ifnamopt,file=fname_options,status='old',iostat=ierr)
@@ -107,11 +105,8 @@ contains
       endif
     end if
 
-
-
     call D_MPI_BCAST(timeav    ,1,0,comm3d,mpierr)
     call D_MPI_BCAST(dtav      ,1,0,comm3d,mpierr)
-!    call D_MPI_BCAST(lsampall  ,1,MPI_LOGICAL,0,comm3d,mpierr)
     call D_MPI_BCAST(lsampcl   ,1,0,comm3d,mpierr)
     call D_MPI_BCAST(lsampco   ,1,0,comm3d,mpierr)
     call D_MPI_BCAST(lsampup   ,1,0,comm3d,mpierr)
@@ -193,7 +188,7 @@ contains
     allocate (subphavl  (k1,isamptot))
     allocate (nrtsamphav (k1,isamptot))
 
-!initialize variables
+    !initialize variables
     nrsampfl    = 0.0
     wfavl       = 0.0
     thlfavl     = 0.0
@@ -229,102 +224,88 @@ contains
     subphavl    = 0.0
     nrtsamphav  = 0
 
-    if(myid==0 .and. .not. lwarmstart) then
-      do isamp = 1,isamptot
-        open (ifoutput,file=trim(samplname(isamp))//'wbudg.'//cexpnr,status='replace')
-        close (ifoutput)
-        open (ifoutput,file=trim(samplname(isamp))//'fld.'//cexpnr,status='replace')
-        close (ifoutput)
-        open (ifoutput,file=trim(samplname(isamp))//'flx.'//cexpnr,status='replace')
-        close (ifoutput)
-      enddo
-    endif
-
-    if (lnetcdf) then
       nsamples = int(itimeav / idtav)
      if (myid==0) then
-        allocate(ncname(nvar,4,isamptot))
-        call nctiminfo(tncname(1,:))
-        fname(10:12) = cexpnr
-        call open_nc(fname,ncid,nrec,n3=kmax)
-        call define_nc(ncid,1,tncname)
-        call writestat_dims_nc(ncid)
-        do isamp=1,isamptot
-          call ncinfo(ncname( 1,:,isamp),'nrsamp'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'number of points','-','tt')
-          call ncinfo(ncname( 2,:,isamp),'w'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'mean vertical velocity','m/s','mt')
-          call ncinfo(ncname( 3,:,isamp),'thl'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'mean liquid water potential temperature','K','tt')
-          call ncinfo(ncname( 4,:,isamp),'qt'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'mean total water content','kg/kg','tt')
-          call ncinfo(ncname( 5,:,isamp),'ql'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'mean liquid water content','kg/kg','tt')
-          call ncinfo(ncname( 6,:,isamp),'thv'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'mean virtual potential temperature','K','tt')
-          call ncinfo(ncname( 7,:,isamp),'massflx'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'mass flux','m^3/s','mt')
-          call ncinfo(ncname( 8,:,isamp),'wthl'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'theta_l flux','K m/s','mt')
-          call ncinfo(ncname( 9,:,isamp),'wqt'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'total water flux','kg/kg m/s','mt')
-          call ncinfo(ncname(10,:,isamp),'wql'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'liquid water flux','kg/kg m/s','mt')
-          call ncinfo(ncname(11,:,isamp),'wthv'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'theta_v flux','K m/s','mt')
-          call ncinfo(ncname(12,:,isamp),'uw'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'uw flux','m^2/s^2','mt')
-          call ncinfo(ncname(13,:,isamp),'vw'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'vw flux','m^2/s^2','mt')
-          call ncinfo(ncname(14,:,isamp),'nrsamph'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'number of points at halflevel','-','mt')
-          call ncinfo(ncname(15,:,isamp),'pf'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '// 'pressure','kg/m/s^2','tt')
-          call ncinfo(ncname(16,:,isamp),'wwrh'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'ww res flux','m^2/s^2','mt')
-          call ncinfo(ncname(17,:,isamp),'wwsf'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'ww sub flux','m^2/s^2','mt')
-          call ncinfo(ncname(18,:,isamp),'dwdth'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'dwdt at sampled point','m/s^2','mt')
-          call ncinfo(ncname(19,:,isamp),'buoyh'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'buoyancy force','m/s^2','mt')
-          call ncinfo(ncname(20,:,isamp),'dpdzh'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'vertical pressure force','m/s^2','mt')
-          call ncinfo(ncname(21,:,isamp),'dwwdzh'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'resolved vertical w advection','m/s^2','mt')
-          call ncinfo(ncname(22,:,isamp),'duwdxh'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'resolved horizontal w advection','m/s^2','mt')
-          call ncinfo(ncname(23,:,isamp),'dtaudzh'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'sg vertical w advection','m/s^2','mt')
-          call ncinfo(ncname(24,:,isamp),'dtaudxh'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'sg horizontal w advection','m/s^2','mt')
-          call ncinfo(ncname(25,:,isamp),'fcorh'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'coriolis force on w','m/s^2','mt')
-          call ncinfo(ncname(26,:,isamp),'resid'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'residual term in sampled budget eqn','m/s^2','mt')
-          call ncinfo(ncname(27,:,isamp),'whend'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'ws at end of sampling period','m/s','mt')
-          call ncinfo(ncname(28,:,isamp),'sighend'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'sigma at end of period','-','mt')
-          call ncinfo(ncname(29,:,isamp),'qrsamp'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'sampled qr','kg/kg','tt')
-          call ncinfo(ncname(30,:,isamp),'wadvhavl'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'instantaneous d/dz (w_s)^2','m/s^2','mt')
-          call ncinfo(ncname(31,:,isamp),'subphavl'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'subplume term in ww budget','m/s^2','mt')
-          call ncinfo(ncname(32,:,isamp),'nrtsamphav'//samplname(isamp),&
-          trim(longsamplname(isamp))//' '//'sampling fraction for gradients','-','mt')
-          call define_nc( ncid, NVar, ncname(:,:,isamp))
-        end do
-     end if
-
-   end if
-
+      allocate(ncname(nvar,4,isamptot))
+      call nctiminfo(tncname(1,:))
+      fname(10:12) = cexpnr
+      call open_nc(fname,ncid,nrec,n3=kmax)
+      call define_nc(ncid,1,tncname)
+      call writestat_dims_nc(ncid)
+      do isamp=1,isamptot
+        call ncinfo(ncname( 1,:,isamp),'nrsamp'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'number of points','-','tt')
+        call ncinfo(ncname( 2,:,isamp),'w'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'mean vertical velocity','m/s','mt')
+        call ncinfo(ncname( 3,:,isamp),'thl'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'mean liquid water potential temperature','K','tt')
+        call ncinfo(ncname( 4,:,isamp),'qt'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'mean total water content','kg/kg','tt')
+        call ncinfo(ncname( 5,:,isamp),'ql'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'mean liquid water content','kg/kg','tt')
+        call ncinfo(ncname( 6,:,isamp),'thv'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'mean virtual potential temperature','K','tt')
+        call ncinfo(ncname( 7,:,isamp),'massflx'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'mass flux','m^3/s','mt')
+        call ncinfo(ncname( 8,:,isamp),'wthl'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'theta_l flux','K m/s','mt')
+        call ncinfo(ncname( 9,:,isamp),'wqt'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'total water flux','kg/kg m/s','mt')
+        call ncinfo(ncname(10,:,isamp),'wql'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'liquid water flux','kg/kg m/s','mt')
+        call ncinfo(ncname(11,:,isamp),'wthv'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'theta_v flux','K m/s','mt')
+        call ncinfo(ncname(12,:,isamp),'uw'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'uw flux','m^2/s^2','mt')
+        call ncinfo(ncname(13,:,isamp),'vw'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'vw flux','m^2/s^2','mt')
+        call ncinfo(ncname(14,:,isamp),'nrsamph'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'number of points at halflevel','-','mt')
+        call ncinfo(ncname(15,:,isamp),'pf'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '// 'pressure','kg/m/s^2','tt')
+        call ncinfo(ncname(16,:,isamp),'wwrh'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'ww res flux','m^2/s^2','mt')
+        call ncinfo(ncname(17,:,isamp),'wwsf'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'ww sub flux','m^2/s^2','mt')
+        call ncinfo(ncname(18,:,isamp),'dwdth'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'dwdt at sampled point','m/s^2','mt')
+        call ncinfo(ncname(19,:,isamp),'buoyh'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'buoyancy force','m/s^2','mt')
+        call ncinfo(ncname(20,:,isamp),'dpdzh'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'vertical pressure force','m/s^2','mt')
+        call ncinfo(ncname(21,:,isamp),'dwwdzh'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'resolved vertical w advection','m/s^2','mt')
+        call ncinfo(ncname(22,:,isamp),'duwdxh'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'resolved horizontal w advection','m/s^2','mt')
+        call ncinfo(ncname(23,:,isamp),'dtaudzh'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'sg vertical w advection','m/s^2','mt')
+        call ncinfo(ncname(24,:,isamp),'dtaudxh'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'sg horizontal w advection','m/s^2','mt')
+        call ncinfo(ncname(25,:,isamp),'fcorh'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'coriolis force on w','m/s^2','mt')
+        call ncinfo(ncname(26,:,isamp),'resid'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'residual term in sampled budget eqn','m/s^2','mt')
+        call ncinfo(ncname(27,:,isamp),'whend'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'ws at end of sampling period','m/s','mt')
+        call ncinfo(ncname(28,:,isamp),'sighend'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'sigma at end of period','-','mt')
+        call ncinfo(ncname(29,:,isamp),'qrsamp'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'sampled qr','kg/kg','tt')
+        call ncinfo(ncname(30,:,isamp),'wadvhavl'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'instantaneous d/dz (w_s)^2','m/s^2','mt')
+        call ncinfo(ncname(31,:,isamp),'subphavl'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'subplume term in ww budget','m/s^2','mt')
+        call ncinfo(ncname(32,:,isamp),'nrtsamphav'//samplname(isamp),&
+        trim(longsamplname(isamp))//' '//'sampling fraction for gradients','-','mt')
+        call define_nc( ncid, NVar, ncname(:,:,isamp))
+      end do
+    end if
 
   end subroutine initsampling
-!> Cleans up after the run
+  
+  !> Cleans up after the run
   subroutine exitsampling
-    use modstat_nc, only : exitstat_nc,lnetcdf
+    use modstat_nc, only : exitstat_nc
     use modmpi,     only : myid
     implicit none
 
@@ -336,7 +317,7 @@ contains
                 pfavl   ,dwdthavl,dwwdzhavl,dpdzhavl,duwdxhavl,dtaudxhavl,dtaudzhavl,  &
                 thvhavl ,fcorhavl,wh_el,sigh_el)
     deallocate(wadvhavl,subphavl,nrtsamphav)
-    if (lnetcdf .and. myid==0) then
+    if (myid==0) then
         call exitstat_nc(ncid)
         deallocate(ncname)
     end if
@@ -798,13 +779,14 @@ contains
     deallocate(sigh0)
 
   end subroutine dosampling
-!> Write the statistics to file
+
+  !> Write the statistics to file
   subroutine writesampling
 
-    use modglobal, only : rtimee,k1,kmax,zf,zh,cexpnr,ifoutput,ijtot
+    use modglobal, only : rtimee,k1,kmax,zf,zh,cexpnr,ijtot
     use modfields, only : presf,presh
     use modmpi,    only : myid,comm3d,mpierr,mpi_sum,D_MPI_ALLREDUCE
-    use modstat_nc, only: lnetcdf, writestat_nc,nc_fillvalue
+    use modstat_nc, only:  writestat_nc,nc_fillvalue
 
     implicit none
     real,dimension(k1,nvar) :: vars
@@ -883,7 +865,7 @@ contains
 
     call D_MPI_ALLREDUCE(wadvhavl   ,wadvhav    ,isamptot*k1,MPI_SUM,comm3d,mpierr)
     call D_MPI_ALLREDUCE(subphavl   ,subphav    ,isamptot*k1,MPI_SUM,comm3d,mpierr)
-!reset variables
+    !reset variables
     nrsampfl    = 0.0
     wfavl       = 0.0
     thlfavl     = 0.0
@@ -919,32 +901,31 @@ contains
     subphavl    = 0.
 
     if (myid==0) then
-      if (lnetcdf) then
       call writestat_nc(ncid,1,tncname,(/rtimee/),nrec,.true.)
-      endif
+
       do isamp = 1,isamptot
 
-         wfmn     = 0.
-         thlfmn   = 0.
-         thvfmn   = 0.
-         qtfmn    = 0.
-         qlfmn    = 0.
-         pfmn     = 0.
-         qrfmn    = 0.
-         dwdthmn  = 0.
-         dwwdzhmn = 0.
-         dpdzhmn  = 0.
-         duwdxhmn = 0.
-         dtaudxhmn= 0.
-         dtaudzhmn= 0.
-         thvhmn   = 0.
-         fcorhmn  = 0.
-         wwrhmn   = 0.
-         wwsfmn   = 0.
-         wadvhmn  = 0.
-         subphmn  = 0.
+        wfmn     = 0.
+        thlfmn   = 0.
+        thvfmn   = 0.
+        qtfmn    = 0.
+        qlfmn    = 0.
+        pfmn     = 0.
+        qrfmn    = 0.
+        dwdthmn  = 0.
+        dwwdzhmn = 0.
+        dpdzhmn  = 0.
+        duwdxhmn = 0.
+        dtaudxhmn= 0.
+        dtaudzhmn= 0.
+        thvhmn   = 0.
+        fcorhmn  = 0.
+        wwrhmn   = 0.
+        wwsfmn   = 0.
+        wadvhmn  = 0.
+        subphmn  = 0.
 
-!normalize variables
+        !normalize variables
 
         do k=1,kmax
           if (nrsampf(k,isamp)>0) then
@@ -975,7 +956,7 @@ contains
             wwrhmn   (k) = wwrhav    (k,isamp)/nrsamph(k,isamp)
             wadvhmn  (k) = wadvhav   (k,isamp)/nrsamph(k,isamp)
             subphmn  (k) = subphav   (k,isamp)/nrsamph(k,isamp)
-          endif
+          end if
 
           nrsampfmn  (k) = nrsampf   (k,isamp)/inorm
           massflxhmn (k) = massflxhav(k,isamp)/inorm
@@ -986,151 +967,50 @@ contains
           uwthmn     (k) = uwthav    (k,isamp)/inorm
           vwthmn     (k) = vwthav    (k,isamp)/inorm
           nrsamphmn  (k) = nrsamph   (k,isamp)/inorm
-
-
-        enddo
-
-!write files
-        open (ifoutput,file=trim(samplname(isamp))//'fld.'//cexpnr,position='append')
-        write(ifoutput,'(//3A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-          '#------------------------------ ',trim(longsamplname(isamp)),' -------------------------------'      &
-          ,'#',timeav,'--- AVERAGING TIMESTEP --- '      &
-          ,nhrs,':',nminut,':',nsecs      &
-          ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-
-        write (ifoutput,'(2A/2A)') &
-           '#------------------------------------------------------' &
-           ,'------------------------------' &
-           ,'#  LEV  HGHT_F HGHT_H   PRES   COV_F  COV_H       W       THL      QT      ' &
-           ,'QL       THV     P   WW_RES_H   WW_SUB_F'
-        do k=1,kmax
-          write(ifoutput,'(i5,2F8.0,F7.1,2F10.5,5F11.5,E14.5,2F14.5)') &
-              k, &
-              zf       (k), &
-              zh       (k), &
-              presf    (k)/100., &
-              nrsampfmn(k), &
-              nrsamphmn(k),&
-              wfmn     (k), &
-              thlfmn   (k), &
-              qtfmn    (k)*1000., &
-              qlfmn    (k)*1000., &
-              thvfmn   (k),&
-              pfmn     (k), &
-              wwrhmn   (k),&
-              wwsfmn   (k)
         end do
-        close(ifoutput)
 
-        open (ifoutput,file=trim(samplname(isamp))//'flx.'//cexpnr,position='append')
-        write(ifoutput,'(//3A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-          '#------------------------------- ',trim(longsamplname(isamp)),' ----------------------------------------'      &
-          ,'#',timeav,'--- AVERAGING TIMESTEP --- '      &
-          ,nhrs,':',nminut,':',nsecs      &
-          ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-
-        write (ifoutput,'(2A/2A)') &
-            '#------------------------------------------------------' &
-            ,'------------------------------' &
-            ,'#   LEV  HGHT  PRES       AW                WTHL                 ' &
-            ,'WQT                WQL                WTHV                UW                VW'
-        do k=1,kmax
-          write(ifoutput,'(i5,F8.0,F7.1,7E16.8)') &
-                k, &
-                zh         (k), &
-                presh      (k)/100., &
-                massflxhmn (k), &
-                wthlthmn    (k), &
-                wqtthmn    (k), &
-                wqlthmn    (k), &
-                wthvthmn    (k), &
-                uwthmn     (k), &
-                vwthmn     (k)
-        end do
-        close(ifoutput)
-
-        open (ifoutput,file=trim(samplname(isamp))//'wbudg.'//cexpnr,position='append')
-        write(ifoutput,'(//3A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-          '#------------------------------ ',trim(samplname(isamp)),' -------------------------------'      &
-          ,'#',timeav,'--- AVERAGING TIMESTEP --- '      &
-          ,nhrs,':',nminut,':',nsecs      &
-          ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-
-
-        write (ifoutput,'(2A/3A)') &
-           '#------------------------------------------------------' &
-           ,'------------------------------' &
-           ,'#  LEV HGHT   PRES     COVER     DWDTMN        BUO          DPDZMN       DWWDZHMN    DUWDXHMN ' &
-           ,'    DTAUDZHMN     DTAUDXHMN    CORIOLIS     RESIDUAL    WS_END       SIG_END      WADVHMN   SUBPLUME ' &
-           ,'     NRTSAMPHAV  '
-        do k=1,kmax
-          write(ifoutput,'(i5,F8.0,F7.1,F9.4,13F13.7,i10)') &
-              k, &
-              zh        (k), &
-              presh     (k)/100., &
-              nrsamphmn (k),&
-              dwdthmn   (k),&
-              thvhmn    (k),&
-              dpdzhmn   (k),&
-              dwwdzhmn  (k),&
-              duwdxhmn  (k),&
-              dtaudzhmn (k),&
-              dtaudxhmn (k),&
-              fcorhmn   (k),&
-              dwwdzhmn(k) +  thvhmn(k) + dpdzhmn(k) +  duwdxhmn(k) + dtaudxhmn(k) + dtaudzhmn(k) + &
-                fcorhmn(k) -  dwdthmn  (k),&
-              wh_e      (k,isamp),&
-              sigh_e    (k,isamp),&
-              wadvhmn   (k),&
-              subphmn   (k),&
-              nrtsamphav (k,isamp)
-        enddo
-        close(ifoutput)
-
+        !write files
         if (isamp.eq.isamptot) then
           nrtsamphav = 0
         endif
 
-        if (lnetcdf) then
-          vars(:, 1)=nrsampfmn
-          if (any(nrsampfmn>0)) then
-          vars(:, 2)=wfmn
-          vars(:, 3)=thlfmn
-          vars(:, 4)=qtfmn
-          vars(:, 5)=qlfmn
-          vars(:, 6)=thvfmn
-          vars(:, 7)=massflxhmn
-          vars(:, 8)=wthlthmn
-          vars(:, 9)=wqtthmn
-          vars(:,10)=wqlthmn
-          vars(:,11)=wthvthmn
-          vars(:,12)=uwthmn
-          vars(:,13)=vwthmn
-          vars(:,14)=nrsamphmn
-          vars(:,15)=pfmn
-          vars(:,16)=wwrhmn
-          vars(:,17)=wwsfmn
-          vars(:,18)=dwdthmn
-          vars(:,19)=thvhmn
-          vars(:,20)=dpdzhmn
-          vars(:,21)=dwwdzhmn
-          vars(:,22)=duwdxhmn
-          vars(:,23)=dtaudzhmn
-          vars(:,24)=dtaudxhmn
-          vars(:,25)=fcorhmn
-          vars(:,26)=dwwdzhmn(:)+thvhmn(:)+dpdzhmn(:)+duwdxhmn(:)+dtaudxhmn(:)+dtaudzhmn(:)+fcorhmn(:)-dwdthmn(:)
-          vars(:,27)=wh_e(:,isamp)
-          vars(:,28)=sigh_e(:,isamp)
-          vars(:,29)=qrfmn
-          vars(:,30)=wadvhmn
-          vars(:,31)=subphmn
-          vars(:,32)=nrtsamphav(:,isamp)
-          else
-            vars(:,2:nvar)=nc_fillvalue
-          end if
-          call writestat_nc(ncid,nvar,ncname(:,:,isamp),vars(1:kmax,:),nrec,kmax)
+        vars(:, 1)=nrsampfmn
+        if (any(nrsampfmn>0)) then
+        vars(:, 2)=wfmn
+        vars(:, 3)=thlfmn
+        vars(:, 4)=qtfmn
+        vars(:, 5)=qlfmn
+        vars(:, 6)=thvfmn
+        vars(:, 7)=massflxhmn
+        vars(:, 8)=wthlthmn
+        vars(:, 9)=wqtthmn
+        vars(:,10)=wqlthmn
+        vars(:,11)=wthvthmn
+        vars(:,12)=uwthmn
+        vars(:,13)=vwthmn
+        vars(:,14)=nrsamphmn
+        vars(:,15)=pfmn
+        vars(:,16)=wwrhmn
+        vars(:,17)=wwsfmn
+        vars(:,18)=dwdthmn
+        vars(:,19)=thvhmn
+        vars(:,20)=dpdzhmn
+        vars(:,21)=dwwdzhmn
+        vars(:,22)=duwdxhmn
+        vars(:,23)=dtaudzhmn
+        vars(:,24)=dtaudxhmn
+        vars(:,25)=fcorhmn
+        vars(:,26)=dwwdzhmn(:)+thvhmn(:)+dpdzhmn(:)+duwdxhmn(:)+dtaudxhmn(:)+dtaudzhmn(:)+fcorhmn(:)-dwdthmn(:)
+        vars(:,27)=wh_e(:,isamp)
+        vars(:,28)=sigh_e(:,isamp)
+        vars(:,29)=qrfmn
+        vars(:,30)=wadvhmn
+        vars(:,31)=subphmn
+        vars(:,32)=nrtsamphav(:,isamp)
+        else
+          vars(:,2:nvar)=nc_fillvalue
         end if
-
+        call writestat_nc(ncid,nvar,ncname(:,:,isamp),vars(1:kmax,:),nrec,kmax)
       end do
     end if
 

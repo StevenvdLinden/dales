@@ -7,7 +7,6 @@
 !>
 !! This module is activated by setting lstat=.true. in the NAMRADSTAT namelist.
 !! Profiles of the radiative statistics are written to radstat.expnr
-!! If lnetcdf is true, this module also writes in the profiles.expnr.nc output.
 !!  \author Stephan de Roode, TU Delft
 !
 !  This file is part of DALES.
@@ -48,9 +47,6 @@ save
   logical :: lstat= .false. !< switch to enable the radiative statistics (on/off)
   logical :: lradclearair= .false. !< switch to enable the radiative statistics (on/off)
 
-!     ------
-
-!   --------------
   real(field_r), allocatable :: thltendav(:)
   real(field_r), allocatable :: thllwtendav(:)
   real(field_r), allocatable :: thlswtendav(:)
@@ -67,7 +63,6 @@ save
   real(field_r), allocatable :: swdcaav(:)
   real(field_r), allocatable :: swucaav(:)
 
-!
   real, allocatable :: thltendmn(:)
   real, allocatable :: thllwtendmn(:)
   real, allocatable :: thlswtendmn(:)
@@ -91,7 +86,7 @@ contains
     use modmpi,    only : myid,mpierr, comm3d, D_MPI_BCAST
     use modglobal, only : dtmax, k1, ifnamopt,fname_options, ifoutput,&
                           cexpnr,dtav_glob,timeav_glob,ladaptive,dt_lim,btime,tres,lwarmstart,checknamelisterror
-    use modstat_nc, only : lnetcdf,define_nc,ncinfo
+    use modstat_nc, only : define_nc,ncinfo
     use fortran_support, only: nnml_output
     use modgenstat, only : idtav_prof=>idtav, itimeav_prof=>itimeav,ncid_prof=>ncid
 
@@ -185,37 +180,30 @@ contains
     thllwtendcamn = 0.0
     thlswtendcamn = 0.0
 
-    if(myid==0 .and. .not. lwarmstart)then
-      open (ifoutput,file='radstat.'//cexpnr,status='replace')
-      close (ifoutput)
+    idtav = idtav_prof
+    itimeav = itimeav_prof
+    tnext      = idtav+btime
+    tnextwrite = itimeav+btime
+    nsamples = int(itimeav / idtav)
+
+    if (myid==0) then
+      call ncinfo(ncname( 1,:),'thltend','Total radiative tendency','K/s','tt')
+      call ncinfo(ncname( 2,:),'thllwtend','Long wave radiative tendency','K/s','tt')
+      call ncinfo(ncname( 3,:),'thlswtend','Short wave radiative tendency','K/s','tt')
+      call ncinfo(ncname( 4,:),'thlradls','Prescribed large scale radiative tendency','K/s','tt')
+      call ncinfo(ncname( 5,:),'lwu','Long wave upward radiative flux','W/m^2','mt')
+      call ncinfo(ncname( 6,:),'lwd','Long wave downward radiative flux','W/m^2','mt')
+      call ncinfo(ncname( 7,:),'swu','Short wave upward radiative flux','W/m^2','mt')
+      call ncinfo(ncname( 8,:),'swd','Short wave downward radiative flux','W/m^2','mt')
+      call ncinfo(ncname( 9,:),'lwuca','Long wave clear air upward radiative flux','W/m^2','mt')
+      call ncinfo(ncname(10,:),'lwdca','Long wave clear air downward radiative flux','W/m^2','mt')
+      call ncinfo(ncname(11,:),'swuca','Short wave clear air upward radiative flux','W/m^2','mt')
+      call ncinfo(ncname(12,:),'swdca','Short wave clear air downward radiative flux','W/m^2','mt')
+      call ncinfo(ncname(13,:),'thllwtendca','Long wave clear air radiative tendency','K/s','tt')
+      call ncinfo(ncname(14,:),'thlswtendca','Short wave clear air radiative tendency','K/s','tt')
+
+      call define_nc( ncid_prof, NVar, ncname)
     end if
-    if (lnetcdf) then
-      idtav = idtav_prof
-      itimeav = itimeav_prof
-      tnext      = idtav+btime
-      tnextwrite = itimeav+btime
-      nsamples = int(itimeav / idtav)
-
-      if (myid==0) then
-        call ncinfo(ncname( 1,:),'thltend','Total radiative tendency','K/s','tt')
-        call ncinfo(ncname( 2,:),'thllwtend','Long wave radiative tendency','K/s','tt')
-        call ncinfo(ncname( 3,:),'thlswtend','Short wave radiative tendency','K/s','tt')
-        call ncinfo(ncname( 4,:),'thlradls','Prescribed large scale radiative tendency','K/s','tt')
-        call ncinfo(ncname( 5,:),'lwu','Long wave upward radiative flux','W/m^2','mt')
-        call ncinfo(ncname( 6,:),'lwd','Long wave downward radiative flux','W/m^2','mt')
-        call ncinfo(ncname( 7,:),'swu','Short wave upward radiative flux','W/m^2','mt')
-        call ncinfo(ncname( 8,:),'swd','Short wave downward radiative flux','W/m^2','mt')
-        call ncinfo(ncname( 9,:),'lwuca','Long wave clear air upward radiative flux','W/m^2','mt')
-        call ncinfo(ncname(10,:),'lwdca','Long wave clear air downward radiative flux','W/m^2','mt')
-        call ncinfo(ncname(11,:),'swuca','Short wave clear air upward radiative flux','W/m^2','mt')
-        call ncinfo(ncname(12,:),'swdca','Short wave clear air downward radiative flux','W/m^2','mt')
-        call ncinfo(ncname(13,:),'thllwtendca','Long wave clear air radiative tendency','K/s','tt')
-        call ncinfo(ncname(14,:),'thlswtendca','Short wave clear air radiative tendency','K/s','tt')
-
-        call define_nc( ncid_prof, NVar, ncname)
-      end if
-
-   end if
 
    !$acc enter data copyin(lwuav, lwdav, swdav, swdirav, swdifav, swuav, lwucaav, lwdcaav, swdcaav, swucaav, &
    !$acc&                  thllwtendav, thltendav,thlswtendav, thllwtendcaav, thlswtendcaav, &
@@ -223,7 +211,7 @@ contains
    !$acc&                  thllwtendmn, thltendmn, thlswtendmn, thlradlsmn, thllwtendcamn, thlswtendcamn)
 
   end subroutine initradstat
-!> General routine, does the timekeeping
+  !> General routine, does the timekeeping
   subroutine radstat
     use modglobal, only : rk3step,timee,dt_lim
     implicit none
@@ -245,7 +233,7 @@ contains
 
   end subroutine radstat
 
-!> Calculates the statistics
+  !> Calculates the statistics
   subroutine do_radstat
 
     use modmpi,    only :  slabsum
@@ -388,126 +376,68 @@ contains
     !$acc end kernels
   end subroutine radclearair
 
-!> Write the statistics to file
+  !> Write the statistics to file
   subroutine writeradstat
-      use modmpi,    only : myid
-      use modglobal, only : cexpnr,ifoutput,kmax,k1,zf,zh,rtimee
-      use modstat_nc, only: lnetcdf, writestat_nc
-      use modgenstat, only: ncid_prof=>ncid,nrec_prof=>nrec
-      use modraddata, only : iradiation,irad_par,irad_rrtmg,irad_rte_rrtmgp
-      implicit none
-      real,dimension(k1,nvar) :: vars
-      integer nsecs, nhrs, nminut,k
+    use modmpi,    only : myid
+    use modglobal, only : cexpnr,ifoutput,kmax,k1,zf,zh,rtimee
+    use modstat_nc, only: writestat_nc
+    use modgenstat, only: ncid_prof=>ncid,nrec_prof=>nrec
+    use modraddata, only : iradiation,irad_par,irad_rrtmg,irad_rte_rrtmgp
+    implicit none
+    real,dimension(k1,nvar) :: vars
+    integer nsecs, nhrs, nminut,k
 
+    nsecs   = nint(rtimee)
+    nhrs    = int(nsecs/3600)
+    nminut  = int(nsecs/60)-nhrs*60
+    nsecs   = mod(nsecs,60)
 
-      nsecs   = nint(rtimee)
-      nhrs    = int(nsecs/3600)
-      nminut  = int(nsecs/60)-nhrs*60
-      nsecs   = mod(nsecs,60)
+    !$acc kernels default(present)
+    lwumn   = lwumn    /nsamples
+    lwdmn   = lwdmn    /nsamples
+    swdmn   = swdmn    /nsamples
+    swdirmn   = swdirmn    /nsamples
+    swdifmn   = swdifmn    /nsamples
+    swumn   = swumn    /nsamples
+    lwucamn   = lwucamn    /nsamples
+    lwdcamn   = lwdcamn    /nsamples
+    swdcamn   = swdcamn    /nsamples
+    swucamn   = swucamn    /nsamples
+    thllwtendmn = thllwtendmn /nsamples
+    thlswtendmn = thlswtendmn /nsamples
+    thllwtendcamn = thllwtendcamn /nsamples
+    thlswtendcamn = thlswtendcamn /nsamples
+    thlradlsmn  = thlradlsmn  /nsamples
+    thltendmn   = thltendmn   /nsamples
+    !$acc end kernels
 
-      !$acc kernels default(present)
-      lwumn   = lwumn    /nsamples
-      lwdmn   = lwdmn    /nsamples
-      swdmn   = swdmn    /nsamples
-      swdirmn   = swdirmn    /nsamples
-      swdifmn   = swdifmn    /nsamples
-      swumn   = swumn    /nsamples
-      lwucamn   = lwucamn    /nsamples
-      lwdcamn   = lwdcamn    /nsamples
-      swdcamn   = swdcamn    /nsamples
-      swucamn   = swucamn    /nsamples
-      thllwtendmn = thllwtendmn /nsamples
-      thlswtendmn = thlswtendmn /nsamples
-      thllwtendcamn = thllwtendcamn /nsamples
-      thlswtendcamn = thlswtendcamn /nsamples
-      thlradlsmn  = thlradlsmn  /nsamples
-      thltendmn   = thltendmn   /nsamples
-      !$acc end kernels
+    !$acc update self(lwumn, lwdmn, swdmn, swumn, thllwtendmn, thlswtendmn, &
+    !$acc&            lwucamn, lwdcamn, swucamn, swdcamn, swdirmn, swdifmn, &
+    !$acc&            thltendmn, thlradlsmn, thllwtendcamn, thlswtendcamn)
 
-      !$acc update self(lwumn, lwdmn, swdmn, swumn, thllwtendmn, thlswtendmn, &
-      !$acc&            lwucamn, lwdcamn, swucamn, swdcamn, swdirmn, swdifmn, &
-      !$acc&            thltendmn, thlradlsmn, thllwtendcamn, thlswtendcamn)
-
-  !     ----------------------
-  !     2.0  write the fields
-  !           ----------------
+    !     ----------------------
+    !     2.0  write the fields
+    !           ----------------
 
     if(myid==0)then
-      open (ifoutput,file='radstat.'//cexpnr,position='append')
-      write(ifoutput,'(//A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-      '#--------------------------------------------------------'      &
-      ,'#',(timeav),'--- AVERAGING TIMESTEP --- '      &
-      ,nhrs,':',nminut,':',nsecs      &
-      ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-      write (ifoutput,'(A/2A/2A)') &
-          '#--------------------------------------------------------------------------' &
-          ,'#LEV RAD_FLX_HGHT  THL_HGHT  LW_UP        LW_DN        SW_UP       SW_DN       ' &
-          ,'TL_LW_TEND   TL_SW_TEND   TL_LS_TEND   TL_TEND' &
-          ,'#    (M)    (M)      (W/M^2)      (W/M^2)      (W/M^2)      (W/M^2)      ' &
-          ,'(K/H)         (K/H)        (K/H)        (K/H)'
-      do k=1,kmax
-        write(ifoutput,'(I4,2F10.2,12E13.4)') &
-            k,zh(k), zf(k),&
-            lwumn(k),&
-            lwdmn(k),&
-            swumn(k),&
-            swdmn(k),&
-            thllwtendmn(k)*3600,&
-            thlswtendmn(k)*3600,&
-            thlradlsmn(k) *3600,&
-            thltendmn(k)  *3600,&
-            lwucamn(k),&
-            lwdcamn(k),&
-            swucamn(k),&
-            swdcamn(k)
-      end do
-      close (ifoutput)
 
-     if(iradiation == irad_par .or. iradiation ==irad_rrtmg .or. iradiation == irad_rte_rrtmgp) then ! delta eddington or RRTMG)
-      open (ifoutput,file='radsplitstat.'//cexpnr,position='append')
-      write(ifoutput,'(//A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-      '#--------------------------------------------------------'      &
-      ,'#',(timeav),'--- AVERAGING TIMESTEP --- '      &
-      ,nhrs,':',nminut,':',nsecs      &
-      ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-      write (ifoutput,'(A/2A/2A)') &
-          '#--------------------------------------------------------------------------' &
-          ,'#LEV  HGHT        LW_UP       LW_DN         SW_UP      SW_DIR_DN    ' &
-          ,'SW_DIF_DN     SW_DN      TL_SW_TEND' &
-          ,'#  (M)           (W/M^2)     (W/M^2)       (W/M^2)      (W/M^2)     ' &
-          ,'(W/M^2)      (W/M^2)       (K/DAY)'
-      do k=1,kmax
-        write(ifoutput,'(I4,F10.2,7E13.4)') &
-            k,zh(k),&
-            lwumn(k),&
-            lwdmn(k),&
-            swumn(k),&
-            swdirmn(k),&
-            swdifmn(k),&
-            swdmn(k),&
-            thlswtendmn(k)*3600*24
-      end do
-      close (ifoutput)
-      endif
+      vars(:, 1) = thltendmn
+      vars(:, 2) = thllwtendmn
+      vars(:, 3) = thlswtendmn
+      vars(:, 4) = thlradlsmn
+      vars(:, 5) = abs(lwumn)
+      vars(:, 6) = abs(lwdmn)
+      vars(:, 7) = abs(swumn)
+      vars(:, 8) = abs(swdmn)
+      vars(:, 9) = abs(lwucamn)
+      vars(:,10) = abs(lwdcamn)
+      vars(:,11) = abs(swucamn)
+      vars(:,12) = abs(swdcamn)
+      vars(:,13) = thllwtendcamn
+      vars(:,14) = thlswtendcamn
 
-      if (lnetcdf) then
-        vars(:, 1) = thltendmn
-        vars(:, 2) = thllwtendmn
-        vars(:, 3) = thlswtendmn
-        vars(:, 4) = thlradlsmn
-        vars(:, 5) = abs(lwumn)
-        vars(:, 6) = abs(lwdmn)
-        vars(:, 7) = abs(swumn)
-        vars(:, 8) = abs(swdmn)
-        vars(:, 9) = abs(lwucamn)
-        vars(:,10) = abs(lwdcamn)
-        vars(:,11) = abs(swucamn)
-        vars(:,12) = abs(swdcamn)
-        vars(:,13) = thllwtendcamn
-        vars(:,14) = thlswtendcamn
+      call writestat_nc(ncid_prof,nvar,ncname,vars(1:kmax,:),nrec_prof,kmax)
 
-       call writestat_nc(ncid_prof,nvar,ncname,vars(1:kmax,:),nrec_prof,kmax)
-      end if
     end if ! end if(myid==0)
 
     !$acc kernels default(present)
@@ -531,7 +461,7 @@ contains
 
   end subroutine writeradstat
 
-!> Cleans up after the run
+  !> Cleans up after the run
   subroutine exitradstat
     implicit none
 
@@ -554,6 +484,5 @@ contains
     deallocate(thllwtendcamn,thlswtendcamn)
 
   end subroutine exitradstat
-
 
 end module modradstat

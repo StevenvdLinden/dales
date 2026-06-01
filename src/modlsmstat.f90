@@ -64,8 +64,8 @@ contains
 !> Initialization routine, reads namelists and inits variables
   subroutine initlsmstat
     use modmpi,    only : myid,mpierr, comm3d, D_MPI_BCAST
-    use modglobal, only : dtmax, ifnamopt,fname_options, ifoutput, cexpnr,dtav_glob,timeav_glob,ladaptive,dt_lim,btime,tres,lwarmstart,checknamelisterror
-    use modstat_nc, only : lnetcdf,define_nc,ncinfo
+    use modglobal, only : dtmax, ifnamopt,fname_options, cexpnr,dtav_glob,timeav_glob,ladaptive,dt_lim,btime,tres,lwarmstart,checknamelisterror
+    use modstat_nc, only : define_nc,ncinfo
     use modgenstat, only : idtav_prof=>idtav, itimeav_prof=>itimeav,ncid_prof=>ncid
     use modsurfdata,only : ksoilmax,isurf
     use modlsm, only : kmax_soil
@@ -134,29 +134,21 @@ contains
     lambdasmn = 0.0
     gammasmn = 0.0
 
-    if(myid==0 .and. .not. lwarmstart)then
-      open (ifoutput,file='lsmstat.'//cexpnr,status='replace')
-      close (ifoutput)
+    idtav = idtav_prof
+    itimeav = itimeav_prof
+    tnext      = idtav+btime
+    tnextwrite = itimeav+btime
+    nsamples = int(itimeav / idtav)
+
+    if (myid==0) then
+      call ncinfo(ncname( 1,:),'tsoil','Soil temperature','W/m^2','tts')
+      call ncinfo(ncname( 2,:),'phiw','Soil moisture content','W/m^2','tts')
+      call ncinfo(ncname( 3,:),'lambda','Heat conductivity soil layer','W/m/K','tts')
+      call ncinfo(ncname( 4,:),'lambdas','Soil moisture diffusivity soil layer','m^2/s','tts')
+      call ncinfo(ncname( 5,:),'gammas','Soil moisture conductivity soil layer','M/s','tts')
+
+      call define_nc( ncid_prof, NVar, ncname)
     end if
-
-    if (lnetcdf) then
-      idtav = idtav_prof
-      itimeav = itimeav_prof
-      tnext      = idtav+btime
-      tnextwrite = itimeav+btime
-      nsamples = int(itimeav / idtav)
-
-      if (myid==0) then
-        call ncinfo(ncname( 1,:),'tsoil','Soil temperature','W/m^2','tts')
-        call ncinfo(ncname( 2,:),'phiw','Soil moisture content','W/m^2','tts')
-        call ncinfo(ncname( 3,:),'lambda','Heat conductivity soil layer','W/m/K','tts')
-        call ncinfo(ncname( 4,:),'lambdas','Soil moisture diffusivity soil layer','m^2/s','tts')
-        call ncinfo(ncname( 5,:),'gammas','Soil moisture conductivity soil layer','M/s','tts')
-
-        call define_nc( ncid_prof, NVar, ncname)
-      end if
-
-   end if
 
   end subroutine initlsmstat
 !> General routine, does the timekeeping
@@ -223,8 +215,8 @@ contains
 !> Write the statistics to file
   subroutine writelsmstat
       use modmpi,    only : myid
-      use modglobal, only : cexpnr,ifoutput,rtimee
-      use modstat_nc, only: lnetcdf, writestat_nc
+      use modglobal, only : cexpnr,rtimee
+      use modstat_nc, only: writestat_nc
       use modgenstat, only: ncid_prof=>ncid,nrec_prof=>nrec
       use modsurfdata,only : isurf, ksoilmax, zsoilc
       use modlsm, only : kmax_soil, z_soil
@@ -251,51 +243,18 @@ contains
       lambdamn   = lambdamn    /nsamples
       lambdasmn   = lambdasmn    /nsamples
       gammasmn   = gammasmn   /nsamples
-  !     ----------------------
-  !     2.0  write the fields
-  !           ----------------
+
+    !     ----------------------
+    !     2.0  write the fields
+    !           ----------------
 
     if(myid==0)then
-      open (ifoutput,file='lsmstat.'//cexpnr,position='append')
-      write(ifoutput,'(//A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-      '#--------------------------------------------------------'      &
-      ,'#',(timeav),'--- AVERAGING TIMESTEP --- '      &
-      ,nhrs,':',nminut,':',nsecs      &
-      ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-      write (ifoutput,'(A/A/A)') &
-          '#--------------------------------------------------------------------------' &
-          ,'#LEV HEIGHT  T_SOIL      SOIL MOIST   HEAT COND.   MOIST DIFF.  MOIST COND.' &
-          ,'#    (M)    (K)          (M^3/M^3)    (W/M/K)      (M^2/S)       (M/S)      '
-      if (isurf == 1) then
-        do k=1,kdim_soil
-          write(ifoutput,'(I3,F8.4,F10.4,4E13.4)') &
-              k, zsoilc(k),&
-              tsoilmn(k),&
-              phiwmn(k),&
-              lambdamn(k),&
-              lambdasmn(k),&
-              gammasmn(k)
-        end do
-      else if (isurf == 11) then
-        do k=1,kdim_soil
-          write(ifoutput,'(I3,F8.4,F10.4,4E13.4)') &
-              k, z_soil(k),&
-              tsoilmn(k),&
-              phiwmn(k),&
-              lambdamn(k),&
-              lambdasmn(k),&
-              gammasmn(k)
-        end do
-      end if
-      close (ifoutput)
-      if (lnetcdf) then
-        vars(:, 1) = tsoilmn
-        vars(:, 2) = phiwmn
-        vars(:, 3) = lambdamn
-        vars(:, 4) = lambdasmn
-        vars(:, 5) = gammasmn
-       call writestat_nc(ncid_prof,nvar,ncname,vars(1:kdim_soil,:),nrec_prof,kdim_soil)
-      end if
+      vars(:, 1) = tsoilmn
+      vars(:, 2) = phiwmn
+      vars(:, 3) = lambdamn
+      vars(:, 4) = lambdasmn
+      vars(:, 5) = gammasmn
+      call writestat_nc(ncid_prof,nvar,ncname,vars(1:kdim_soil,:),nrec_prof,kdim_soil)
     end if ! end if(myid==0)
 
     phiwmn = 0.0
@@ -305,7 +264,6 @@ contains
     gammasmn  = 0.0
 
     deallocate(vars)
-
 
   end subroutine writelsmstat
 

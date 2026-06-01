@@ -57,7 +57,7 @@ contains
     use modmpi,   only :myid,mpierr,comm3d,cmyid,D_MPI_BCAST
     use modglobal,only :imax,jmax,ifnamopt,fname_options,dtmax,dtav_glob,ladaptive,dt_lim,cexpnr,tres,btime,checknamelisterror,&
                         output_prefix
-    use modstat_nc,only : lnetcdf,open_nc, define_nc, redefine_nc,ncinfo,nctiminfo,writestat_dims_nc
+    use modstat_nc,only : open_nc, define_nc, redefine_nc,ncinfo,nctiminfo,writestat_dims_nc
     use fortran_support, only: nnml_output
    implicit none
     character(len=*), parameter :: routine = modname//'/initcape'
@@ -80,39 +80,36 @@ contains
 
     if(.not.(lcape)) return
 
-    if (lnetcdf) then
+    ofile = cross_section_file_t('cape.nc', nx=itot, ny=jtot, &
+                                  lgpu=.false.)
+    
+    call add_output_file(ofile, dtav, ofile_id)
 
-      ofile = cross_section_file_t('cape.nc', nx=itot, ny=jtot, &
-                                   lgpu=.false.)
-      
-      call add_output_file(ofile, dtav, ofile_id)
-
-      call ofile%add_var('dcape','actual dcape','J/m^2','tt0t')
-      call ofile%add_var('dscape','actual dscape','J/m^2','tt0t')
-      call ofile%add_var('dcin','actual CIN between zcb and 1.2 zcb','J/m^2','tt0t')
-      call ofile%add_var('dscin','actual CIN up to zcb','J/m^2','tt0t')
-      call ofile%add_var('dcintot','total CIN up to dcape level','J/m^2','tt0t')
-      call ofile%add_var('capemax','CAPEmax','J/m^2','tt0t')
-      call ofile%add_var('cinmax','CIN as in CAPEmax','J/m^2','tt0t')
-      call ofile%add_var('hw2cb','1/2 W^2 at the top of the subcloud layer','m^2/s^2','tt0t')
-      call ofile%add_var('hw2max','highest 1/2 W^2','m^2/s^2','tt0t')
-      call ofile%add_var('qtcb','qt at cloudbase','kg/kg','tt0t')
-      call ofile%add_var('thlcb','thl at cloudbase','K','tt0t')
-      call ofile%add_var('wcb','w at cloudbase','m/s','tt0t')
-      call ofile%add_var('buoycb','buoyancy at cloudbase','K','tt0t')
-      call ofile%add_var('buoymax','maximum buoyancy','K','tt0t')
-      call ofile%add_var('qlcb','ql at cloudbase','kg/kg','tt0t')
-      call ofile%add_var('lwp','liquid water path','kg/m^2','tt0t')
-      call ofile%add_var('rwp','rain water path','kg/m^2','tt0t')
-      call ofile%add_var('twp','total water path','kg/m^2','tt0t')
-      call ofile%add_var('cldtop','cloud top height','m','tt0t')
-      call ofile%add_var('surfprec','surface precipitation','kg/m^2/s','tt0t')
-      call ofile%add_var('hmix','mixed layer height','m','tt0t')
-      call ofile%add_var('hinvsrf','height of surface inversion','m','tt0t')
-      call ofile%add_var('umix','u wind speed averaged over mixed layer','m/s','tt0t')
-      call ofile%add_var('vmix','v wind speed averaged over mixed layer','m/s','tt0t')
-      call ofile%add_var('thetavmix','theta_v averaged over mixed layer','K','tt0t')
-    end if
+    call ofile%add_var('dcape','actual dcape','J/m^2','tt0t')
+    call ofile%add_var('dscape','actual dscape','J/m^2','tt0t')
+    call ofile%add_var('dcin','actual CIN between zcb and 1.2 zcb','J/m^2','tt0t')
+    call ofile%add_var('dscin','actual CIN up to zcb','J/m^2','tt0t')
+    call ofile%add_var('dcintot','total CIN up to dcape level','J/m^2','tt0t')
+    call ofile%add_var('capemax','CAPEmax','J/m^2','tt0t')
+    call ofile%add_var('cinmax','CIN as in CAPEmax','J/m^2','tt0t')
+    call ofile%add_var('hw2cb','1/2 W^2 at the top of the subcloud layer','m^2/s^2','tt0t')
+    call ofile%add_var('hw2max','highest 1/2 W^2','m^2/s^2','tt0t')
+    call ofile%add_var('qtcb','qt at cloudbase','kg/kg','tt0t')
+    call ofile%add_var('thlcb','thl at cloudbase','K','tt0t')
+    call ofile%add_var('wcb','w at cloudbase','m/s','tt0t')
+    call ofile%add_var('buoycb','buoyancy at cloudbase','K','tt0t')
+    call ofile%add_var('buoymax','maximum buoyancy','K','tt0t')
+    call ofile%add_var('qlcb','ql at cloudbase','kg/kg','tt0t')
+    call ofile%add_var('lwp','liquid water path','kg/m^2','tt0t')
+    call ofile%add_var('rwp','rain water path','kg/m^2','tt0t')
+    call ofile%add_var('twp','total water path','kg/m^2','tt0t')
+    call ofile%add_var('cldtop','cloud top height','m','tt0t')
+    call ofile%add_var('surfprec','surface precipitation','kg/m^2/s','tt0t')
+    call ofile%add_var('hmix','mixed layer height','m','tt0t')
+    call ofile%add_var('hinvsrf','height of surface inversion','m','tt0t')
+    call ofile%add_var('umix','u wind speed averaged over mixed layer','m/s','tt0t')
+    call ofile%add_var('vmix','v wind speed averaged over mixed layer','m/s','tt0t')
+    call ofile%add_var('thetavmix','theta_v averaged over mixed layer','K','tt0t')
 
   end subroutine initcape
 
@@ -121,7 +118,7 @@ contains
     use modglobal, only : imax,jmax,i1,j1,k1,kmax,rlv,cp,rv,rd,rk3step,timee,rtimee,dt_lim,grav,eps1,&
     zf,dzf,tup,tdn,zh,kcb
     use modfields, only : u0,v0,thl0,qt0,ql0,w0,sv0,exnf,thvf,exnf,presf,rhobf
-    use modstat_nc, only : lnetcdf, writestat_nc
+    use modstat_nc, only : writestat_nc
     use modgenstat, only : qlmnlast,wthvtmnlast
     use modmicrodata, only : precep, imicro, imicro_bulk, imicro_sice, imicro_sice2
     use modthermodynamics, only: ttab, esatltab, esatitab

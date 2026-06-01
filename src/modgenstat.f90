@@ -189,10 +189,10 @@ contains
 
   subroutine initgenstat
     use modmpi, only : myid,mpierr, comm3d, D_MPI_BCAST
-    use modglobal, only : i1, ih, j1, jh, kmax, k1, nsv, ifnamopt, fname_options, ifoutput, &
+    use modglobal, only : i1, ih, j1, jh, kmax, k1, nsv, ifnamopt, fname_options, &
                           cexpnr, dtav_glob, timeav_glob, dt_lim, btime, tres, &
                           lwarmstart, checknamelisterror
-    use modstat_nc, only : lnetcdf, open_nc, ncinfo, define_nc, nctiminfo, writestat_dims_nc
+    use modstat_nc, only : open_nc, ncinfo, define_nc, nctiminfo, writestat_dims_nc
     use modsurfdata, only : isurf, ksoilmax
     use modlsm, only : kmax_soil
     use modtracers, only : tracer_prop
@@ -381,107 +381,83 @@ contains
     qlmnlast = 0.
     wthvtmnlast = 0.
 
-    if(myid==0)then
-       if (.not. lwarmstart) then
-          open (ifoutput,file='field.'//cexpnr,status='replace')
-          close (ifoutput)
-          open (ifoutput,file='flux1.'//cexpnr,status='replace')
-          close (ifoutput)
-          open (ifoutput,file='flux2.'//cexpnr,status='replace')
-          close (ifoutput)
-          open (ifoutput,file='moments.'//cexpnr,status='replace')
-          close (ifoutput)
-          do n=1,nsv
-             name = 'svnnnfld.'//cexpnr
-             write (name(3:5),'(i3.3)') n ! TODO apply tracer_props
-             open (ifoutput,file=name,status='replace')
-             close (ifoutput)
-          end do
-          do n=1,nsv
-             name = 'svnnnflx.'//cexpnr
-             write (name(3:5),'(i3.3)') n ! TODO apply tracer_props
-             open (ifoutput,file=name,status='replace')
-             close (ifoutput)
-          end do
-       end if
+    if(myid==0) then
 
-      if (lnetcdf) then
-        fname(10:12) = cexpnr
-        nvar = nvar + 7*nsv
-        allocate(ncname(nvar,4))
-        call nctiminfo(tncname(1,:))
-        call ncinfo(ncname( 1,:),'rhof','Full level slab averaged density','kg/m^3','tt')
-        call ncinfo(ncname( 2,:),'rhobf','Full level base-state density','kg/m^3','tt')
-        call ncinfo(ncname( 3,:),'rhobh','Half level base-state density','kg/m^3','mt')
-        call ncinfo(ncname( 4,:),'presh','Pressure at cell center','Pa','tt')
-        call ncinfo(ncname( 5,:),'u','West-East velocity','m/s','tt')
-        call ncinfo(ncname( 6,:),'v','South-North velocity','m/s','tt')
-        call ncinfo(ncname( 7,:),'w','Vertical velocity','m/s','mt')
-        call ncinfo(ncname( 8,:),'thl','Liquid water potential temperature','K','tt')
-        call ncinfo(ncname( 9,:),'thv','Virtual potential temperature','K','tt')
-        call ncinfo(ncname(10,:),'qt','Total water specific humidity','kg/kg','tt')
-        call ncinfo(ncname(11,:),'ql','Liquid water specific humidity','kg/kg','tt')
-        call ncinfo(ncname(12,:),'wthls','SFS-Theta_l flux','Km/s','mt')
-        call ncinfo(ncname(13,:),'wthlr','Resolved Theta_l flux','Km/s','mt')
-        call ncinfo(ncname(14,:),'wthlt','Total Theta_l flux','Km/s','mt')
-        call ncinfo(ncname(15,:),'wthvs','SFS-buoyancy flux','Km/s','mt')
-        call ncinfo(ncname(16,:),'wthvr','Resolved buoyancy flux','Km/s','mt')
-        call ncinfo(ncname(17,:),'wthvt','Total buoyancy flux','Km/s','mt')
-        call ncinfo(ncname(18,:),'wqts','SFS-moisture flux','kg/kg m/s','mt')
-        call ncinfo(ncname(19,:),'wqtr','Resolved moisture flux','kg/kg m/s','mt')
-        call ncinfo(ncname(20,:),'wqtt','Total moisture flux','kg/kg m/s','mt')
-        call ncinfo(ncname(21,:),'wqls','SFS-liquid water flux','kg/kg m/s','mt')
-        call ncinfo(ncname(22,:),'wqlr','Resolved liquid water flux','kg/kg m/s','mt')
-        call ncinfo(ncname(23,:),'wqlt','Total liquid water flux','kg/kg m/s','mt')
-        call ncinfo(ncname(24,:),'uws','SFS-momentum flux (uw)','m^2/s^2','mt')
-        call ncinfo(ncname(25,:),'uwr','Resolved momentum flux (uw)','m^2/s^2','mt')
-        call ncinfo(ncname(26,:),'uwt','Total momentum flux (uw)','m^2/s^2','mt')
-        call ncinfo(ncname(27,:),'vws','SFS-momentum flux (vw)','m^2/s^2','mt')
-        call ncinfo(ncname(28,:),'vwr','Resolved momentum flux (vw)','m^2/s^2','mt')
-        call ncinfo(ncname(29,:),'vwt','Total momentum flux (vw)','m^2/s^2','mt')
-        call ncinfo(ncname(30,:),'w2s','SFS-TKE','m^2/s^2','mt')
-        call ncinfo(ncname(31,:),'w2r','Resolved vertical velocity variance','m^2/s^2','mt')
-        !call ncinfo(ncname(31,:),'w2t','Total vertical velocity variance','m^2/s^2','mt')
-        call ncinfo(ncname(32,:),'skew','vertical velocity skewness','-','mt')
-        call ncinfo(ncname(33,:),'u2r','Resolved horizontal velocity variance (u)','m^2/s^2','tt')
-        call ncinfo(ncname(34,:),'v2r','Resolved horizontal velocity variance (v)','m^2/s^2','tt')
-        call ncinfo(ncname(35,:),'thl2r','Resolved theta_l variance','K^2','tt')
-        call ncinfo(ncname(36,:),'thv2r','Resolved buoyancy variance','K^2','tt')
-        call ncinfo(ncname(37,:),'th2r','Resolved theta variance','K^2','tt')
-        call ncinfo(ncname(38,:),'qt2r','Resolved total water variance','(kg/kg)^2','tt')
-        call ncinfo(ncname(39,:),'ql2r','Resolved liquid water variance','(kg/kg)^2','tt')
-        call ncinfo(ncname(40,:),'cs','Smagorinsky constant','-','tt')
-        call ncinfo(ncname(41,:),'cfrac','Cloud fraction','-','tt')
-        call ncinfo(ncname(42,:),'hur','Relative humidity','%','tt')
-        call ncinfo(ncname(43,:),'hus','Specific humidity','kg/kg','tt')
-        call ncinfo(ncname(44,:),'ta', 'Temperature','K','tt')
-        call ncinfo(ncname(45,:),'clw', 'Specific cloud liquid water content','kg/kg','tt')
-        call ncinfo(ncname(46,:),'cli', 'Specific cloud ice content','kg/kg','tt')
-        call ncinfo(ncname(47,:),'plw', 'Specific precipitation liquid water content','kg/kg','tt')
-        call ncinfo(ncname(48,:),'pli', 'Specific precipitation ice content','kg/kg','tt')
-        do n = 1, nsv
-          call ncinfo(ncname(48+7*(n-1)+1,:),trim(tracer_prop(n)%tracname), trim(tracer_prop(n)%traclong), trim(tracer_prop(n)%unit),'tt')
-          call ncinfo(ncname(48+7*(n-1)+2,:),trim(tracer_prop(n)%tracname)//'p', trim(tracer_prop(n)%traclong)//' tendency',trim(tracer_prop(n)%unit)//'/s)','tt')
-          call ncinfo(ncname(48+7*(n-1)+3,:),trim(tracer_prop(n)%tracname)//'pt', trim(tracer_prop(n)%traclong)//' turbulence tendency',trim(tracer_prop(n)%unit)//'/s','tt')
-          call ncinfo(ncname(48+7*(n-1)+4,:),trim(tracer_prop(n)%tracname)//'2r','Resolved '//trim(tracer_prop(n)%traclong)//' variance','('//trim(tracer_prop(n)%unit)//')^2','tt')
-          call ncinfo(ncname(48+7*(n-1)+5,:),'w'//trim(tracer_prop(n)%tracname)//'s','SFS '//trim(tracer_prop(n)%traclong)//' flux',trim(tracer_prop(n)%unit)//' m/s','mt')
-          call ncinfo(ncname(48+7*(n-1)+6,:),'w'//trim(tracer_prop(n)%tracname)//'r','Resolved '//trim(tracer_prop(n)%traclong)//' flux',trim(tracer_prop(n)%unit)//' m/s','mt')
-          call ncinfo(ncname(48+7*(n-1)+7,:),'w'//trim(tracer_prop(n)%tracname)//'t','Total '//trim(tracer_prop(n)%traclong)//' flux',trim(tracer_prop(n)%unit)//' m/s','mt')
-        end do
+      fname(10:12) = cexpnr
+      nvar = nvar + 7*nsv
+      allocate(ncname(nvar,4))
+      call nctiminfo(tncname(1,:))
+      call ncinfo(ncname( 1,:),'rhof','Full level slab averaged density','kg/m^3','tt')
+      call ncinfo(ncname( 2,:),'rhobf','Full level base-state density','kg/m^3','tt')
+      call ncinfo(ncname( 3,:),'rhobh','Half level base-state density','kg/m^3','mt')
+      call ncinfo(ncname( 4,:),'presh','Pressure at cell center','Pa','tt')
+      call ncinfo(ncname( 5,:),'u','West-East velocity','m/s','tt')
+      call ncinfo(ncname( 6,:),'v','South-North velocity','m/s','tt')
+      call ncinfo(ncname( 7,:),'w','Vertical velocity','m/s','mt')
+      call ncinfo(ncname( 8,:),'thl','Liquid water potential temperature','K','tt')
+      call ncinfo(ncname( 9,:),'thv','Virtual potential temperature','K','tt')
+      call ncinfo(ncname(10,:),'qt','Total water specific humidity','kg/kg','tt')
+      call ncinfo(ncname(11,:),'ql','Liquid water specific humidity','kg/kg','tt')
+      call ncinfo(ncname(12,:),'wthls','SFS-Theta_l flux','Km/s','mt')
+      call ncinfo(ncname(13,:),'wthlr','Resolved Theta_l flux','Km/s','mt')
+      call ncinfo(ncname(14,:),'wthlt','Total Theta_l flux','Km/s','mt')
+      call ncinfo(ncname(15,:),'wthvs','SFS-buoyancy flux','Km/s','mt')
+      call ncinfo(ncname(16,:),'wthvr','Resolved buoyancy flux','Km/s','mt')
+      call ncinfo(ncname(17,:),'wthvt','Total buoyancy flux','Km/s','mt')
+      call ncinfo(ncname(18,:),'wqts','SFS-moisture flux','kg/kg m/s','mt')
+      call ncinfo(ncname(19,:),'wqtr','Resolved moisture flux','kg/kg m/s','mt')
+      call ncinfo(ncname(20,:),'wqtt','Total moisture flux','kg/kg m/s','mt')
+      call ncinfo(ncname(21,:),'wqls','SFS-liquid water flux','kg/kg m/s','mt')
+      call ncinfo(ncname(22,:),'wqlr','Resolved liquid water flux','kg/kg m/s','mt')
+      call ncinfo(ncname(23,:),'wqlt','Total liquid water flux','kg/kg m/s','mt')
+      call ncinfo(ncname(24,:),'uws','SFS-momentum flux (uw)','m^2/s^2','mt')
+      call ncinfo(ncname(25,:),'uwr','Resolved momentum flux (uw)','m^2/s^2','mt')
+      call ncinfo(ncname(26,:),'uwt','Total momentum flux (uw)','m^2/s^2','mt')
+      call ncinfo(ncname(27,:),'vws','SFS-momentum flux (vw)','m^2/s^2','mt')
+      call ncinfo(ncname(28,:),'vwr','Resolved momentum flux (vw)','m^2/s^2','mt')
+      call ncinfo(ncname(29,:),'vwt','Total momentum flux (vw)','m^2/s^2','mt')
+      call ncinfo(ncname(30,:),'w2s','SFS-TKE','m^2/s^2','mt')
+      call ncinfo(ncname(31,:),'w2r','Resolved vertical velocity variance','m^2/s^2','mt')
+      !call ncinfo(ncname(31,:),'w2t','Total vertical velocity variance','m^2/s^2','mt')
+      call ncinfo(ncname(32,:),'skew','vertical velocity skewness','-','mt')
+      call ncinfo(ncname(33,:),'u2r','Resolved horizontal velocity variance (u)','m^2/s^2','tt')
+      call ncinfo(ncname(34,:),'v2r','Resolved horizontal velocity variance (v)','m^2/s^2','tt')
+      call ncinfo(ncname(35,:),'thl2r','Resolved theta_l variance','K^2','tt')
+      call ncinfo(ncname(36,:),'thv2r','Resolved buoyancy variance','K^2','tt')
+      call ncinfo(ncname(37,:),'th2r','Resolved theta variance','K^2','tt')
+      call ncinfo(ncname(38,:),'qt2r','Resolved total water variance','(kg/kg)^2','tt')
+      call ncinfo(ncname(39,:),'ql2r','Resolved liquid water variance','(kg/kg)^2','tt')
+      call ncinfo(ncname(40,:),'cs','Smagorinsky constant','-','tt')
+      call ncinfo(ncname(41,:),'cfrac','Cloud fraction','-','tt')
+      call ncinfo(ncname(42,:),'hur','Relative humidity','%','tt')
+      call ncinfo(ncname(43,:),'hus','Specific humidity','kg/kg','tt')
+      call ncinfo(ncname(44,:),'ta', 'Temperature','K','tt')
+      call ncinfo(ncname(45,:),'clw', 'Specific cloud liquid water content','kg/kg','tt')
+      call ncinfo(ncname(46,:),'cli', 'Specific cloud ice content','kg/kg','tt')
+      call ncinfo(ncname(47,:),'plw', 'Specific precipitation liquid water content','kg/kg','tt')
+      call ncinfo(ncname(48,:),'pli', 'Specific precipitation ice content','kg/kg','tt')
+      do n = 1, nsv
+        call ncinfo(ncname(48+7*(n-1)+1,:),trim(tracer_prop(n)%tracname), trim(tracer_prop(n)%traclong), trim(tracer_prop(n)%unit),'tt')
+        call ncinfo(ncname(48+7*(n-1)+2,:),trim(tracer_prop(n)%tracname)//'p', trim(tracer_prop(n)%traclong)//' tendency',trim(tracer_prop(n)%unit)//'/s)','tt')
+        call ncinfo(ncname(48+7*(n-1)+3,:),trim(tracer_prop(n)%tracname)//'pt', trim(tracer_prop(n)%traclong)//' turbulence tendency',trim(tracer_prop(n)%unit)//'/s','tt')
+        call ncinfo(ncname(48+7*(n-1)+4,:),trim(tracer_prop(n)%tracname)//'2r','Resolved '//trim(tracer_prop(n)%traclong)//' variance','('//trim(tracer_prop(n)%unit)//')^2','tt')
+        call ncinfo(ncname(48+7*(n-1)+5,:),'w'//trim(tracer_prop(n)%tracname)//'s','SFS '//trim(tracer_prop(n)%traclong)//' flux',trim(tracer_prop(n)%unit)//' m/s','mt')
+        call ncinfo(ncname(48+7*(n-1)+6,:),'w'//trim(tracer_prop(n)%tracname)//'r','Resolved '//trim(tracer_prop(n)%traclong)//' flux',trim(tracer_prop(n)%unit)//' m/s','mt')
+        call ncinfo(ncname(48+7*(n-1)+7,:),'w'//trim(tracer_prop(n)%tracname)//'t','Total '//trim(tracer_prop(n)%traclong)//' flux',trim(tracer_prop(n)%unit)//' m/s','mt')
+      end do
 
-        if (isurf==1) then
-          call open_nc(fname,  ncid,nrec,n3=kmax,ns=ksoilmax)
-        else if (isurf==11) then
-          call open_nc(fname,  ncid,nrec,n3=kmax,ns=kmax_soil)
-        else
-          call open_nc(fname,  ncid,nrec,n3=kmax)
-        endif
-        if (nrec == 0) then
-          call define_nc( ncid, 1, tncname)
-          call writestat_dims_nc(ncid)
-        end if
-        call define_nc( ncid, NVar, ncname)
+      if (isurf==1) then
+        call open_nc(fname,  ncid,nrec,n3=kmax,ns=ksoilmax)
+      else if (isurf==11) then
+        call open_nc(fname,  ncid,nrec,n3=kmax,ns=kmax_soil)
+      else
+        call open_nc(fname,  ncid,nrec,n3=kmax)
       end if
+      if (nrec == 0) then
+        call define_nc( ncid, 1, tncname)
+        call writestat_dims_nc(ncid)
+      end if
+      call define_nc( ncid, NVar, ncname)
 
     end if
 
@@ -1162,13 +1138,12 @@ contains
   end subroutine calc_moment
 
   subroutine writestat
-      use modglobal, only : kmax,k1,nsv, zh,zf,rtimee,rlv,cp,cexpnr,ifoutput
+      use modglobal, only : kmax,k1,nsv, zh,zf,rtimee,rlv,cp,cexpnr
       use modfields, only : presf,presh,exnf,exnh,rhof,rhobf,rhobh
       use modsubgriddata, only : csz
       use modmpi,    only : myid
-      use modstat_nc, only: lnetcdf, writestat_nc
+      use modstat_nc, only: writestat_nc
       implicit none
-
 
       real,dimension(k1,nvar) :: vars
       real,allocatable, dimension(:) :: tmn, thmn
@@ -1275,295 +1250,72 @@ contains
   !           ----------------
 
     if(myid==0)then
-      open (ifoutput,file='field.'//cexpnr,position='append')
-      write(ifoutput,'(//A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-      '#--------------------------------------------------------'      &
-      ,'#',(timeav),'--- AVERAGING TIMESTEP --- '      &
-      ,nhrs,':',nminut,':',nsecs      &
-      ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-      write (ifoutput,'(A/2A/2A)') &
-          '#--------------------------------------------------------' &
-          ,'#LEV  HGHT    PRES    TEMP       TH_L     THETA      TH_V     ' &
-          ,'  QT_AV      QL_AV      U       V   CLOUD FRACTION  CS' &
-          ,'#      (M)    (MB)   (----------- (KELVIN) ---------------)    ' &
-          ,'(----(G/KG)------)  (--- (M/S ---)   (-----------)  (---)'
-      do k=1,kmax
-        write(ifoutput,'(I3,F10.2,F7.1,5F10.4,F12.5,3F11.4,F11.5)') &
-            k, &
-            zf    (k), &
-            presf (k)/100., &
-            tmn   (k), &
-            thlmn (k), &
-            thmn  (k), &
-            thvmn (k), &
-            qtmn  (k)*1000., &
-            qlmn  (k)*1000., &
-            umn   (k), &
-            vmn   (k), &
-            cfracmn(k), &
-            cszmn(k)
-      end do
-      close (ifoutput)
 
-  !     -------------------------
-  !     6.5   write the fluxes
-  !     -----------------------------------------------------------------------
+      !     -------------------------
+      !     6.5   write the fluxes
+    !     -----------------------------------------------------------------------
 
-      open (ifoutput,file='flux1.'//cexpnr,position='append')
-
-      write(ifoutput,'(//2A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-            '#-------------------------------------------------------------' &
-          ,'---------------------------------)' &
-            ,'#',(timeav),'--- AVERAGING TIMESTEP --- ' &
-            ,nhrs,':',nminut,':',nsecs &
-            ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-      write (ifoutput,'(2A/A/2A/2A/2A/2A)') &
-            '#---------------------------------------------------------------' &
-          ,'---------------------------------)' &
-          ,'#                                                               ' &
-          ,'#                  |                                  TURBULENT ' &
-          ,'FLUXES                           |                             ' &
-          ,'#LEV HEIGHT  PRES  |   WTHL_SUB    WTHL_RES    WTHL_TOT        WQ' &
-          ,'T_SUB      WQT_RES     WQT_TOT   ' &
-          ,'#     (M)    (MB) | (----------   (K M/S)   --------------)     ' &
-          ,'(---------- (M/S)   -------------)                             ' &
-          ,'#---------------------------------------------------------------' &
-          ,'---------------------------------)'
-
-      write(ifoutput,'(I3,F10.2,F7.1,6E13.5)') &
-            (k, &
-            zh       (k), &
-            presh     (k)/100., &
-            wthlsmn   (k)                              , &
-            wthlrmn   (k)                              , &
-            wthltmn   (k)                              , &
-            wqtsmn   (k)                              , &
-            wqtrmn   (k)                              , &
-            wqttmn   (k),&
-             k=1,kmax)
-
-
-
-      close(ifoutput)
-
-      open (ifoutput,file='flux2.'//cexpnr,position='append')
-
-      write(ifoutput,'(//A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-            '#--------------------------------------------------------' &
-            ,'#',(timeav),'--- AVERAGING TIMESTEP --- ' &
-            ,nhrs,':',nminut,':',nsecs &
-            ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-      write (ifoutput,'(A/A/A/3A/4A/2A)') &
-            '#(------------------------------------------------------------)' &
-          ,'#                                                             ' &
-          ,'#                                     TURBULENT FLUXES        ' &
-          ,'#LEV HEIGHT  PRES  |    UW_TOT      VW_TOT       UW_SGS   ' &
-          ,'   VW_SGS       UW_RES       VW_RES ' &
-          ,'      WTH_TOT       WQ_L       WTHV_SUB     WTHV_RES     WTHV_TOT' &
-          ,'#     (M)    (MB) |   ' &
-          ,'(---------------------------- (M/S)^2  ---------------------------------)' &
-          ,'   (-(K M/S)-)   (-(' &
-          ,'M/S)-)     (----------  (K M/S)  -----------)' &
-          ,'#(------------------------------------------------------------' &
-          ,'-----------------------------------------)'
-
-      write(ifoutput,'(I3,F10.2,F7.1,11E13.5)') &
-          (k, &
-            zh       (k), &
-            presh     (k)/100., &
-            uwtmn    (k)                              , &
-            vwtmn    (k)                              , &
-            uwsmn    (k)                              , &
-            vwsmn    (k)                              , &
-            uwrmn    (k)                              , &
-            vwrmn    (k)                              , &
-            wthltmn   (k) + wqltmn(k)*(rlv/cp)/exnh(k) , &
-            wqltmn   (k)                              , &
-            wthvsmn   (k)                              , &
-            wthvrmn   (k)                              , &
-            wthvtmn   (k)                              , &
-            k=1,kmax)
-
-
-      close(ifoutput)
-
-      open (ifoutput,file='moments.'//cexpnr,position='append')
-
-      write(ifoutput,'(//A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-        '#--------------------------------------------------------'      &
-        ,'#',(timeav),'--- AVERAGING TIMESTEP --- '      &
-        ,nhrs,':',nminut,':',nsecs      &
-        ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-
-      write (ifoutput,'(3A/3A/3A)') &
-            '#----------------------------------------------------' &
-            ,'---------------------------------------------------' &
-            ,'------------------------------' &
-            ,'#  LEV   HGHT   PRES     THL**2       THV**2         ' &
-            ,'TH**2       QT**2       U*U    ' &
-            ,'  V*V     HGHT     W*W     SKEWW     SFS-TKE' &
-            ,'#        (M)   (MB)     (--------------(K*K)--------' &
-            ,'------)     (G/KG)^2     (-(M/S)' &
-            ,'^2)-)      (M)     (M/S)^2  ()        (M/S)^2'
-
-      write(ifoutput,'(I5,F10.2,F7.1,4E13.5,2F9.4,F10.2,3F9.4)') &
-            (k, &
-            zf    (k), &
-            presf (k)/100., &
-            thl2mn(k), &
-            thv2mn(k), &
-            th2mn (k), &
-            qt2mn (k)*1e6, &
-!             qs2mn (k)*1e6, &
-            u2mn  (k), &
-            v2mn  (k), &
-            zh    (k), &
-            w2mn  (k), &
-            skewmn(k), &
-            w2submn(k), &
-            k=1,kmax)
-
-      close(ifoutput)
-
-
-  !----   Write information about scalar field and its tendencies ------
+      vars(:, 1)=rhof
+      vars(:, 2)=rhobf
+      vars(:, 3)=rhobh
+      vars(:, 4)=presh
+      vars(:, 5)=umn
+      vars(:, 6)=vmn
+      vars(:, 7)=wmn
+      vars(:, 8)=thlmn
+      vars(:, 9)=thvmn
+      vars(:,10)=qtmn
+      vars(:,11)=qlmn
+      vars(:,12)=wthlsmn
+      vars(:,13)=wthlrmn
+      vars(:,14)=wthltmn
+      vars(:,15)=wthvsmn
+      vars(:,16)=wthvrmn
+      vars(:,17)=wthvtmn
+      vars(:,18)=wqtsmn
+      vars(:,19)=wqtrmn
+      vars(:,20)=wqttmn
+      vars(:,21)=wqlsmn
+      vars(:,22)=wqlrmn
+      vars(:,23)=wqltmn
+      vars(:,24)=uwsmn
+      vars(:,25)=uwrmn
+      vars(:,26)=uwtmn
+      vars(:,27)=vwsmn
+      vars(:,28)=vwrmn
+      vars(:,29)=vwtmn
+      vars(:,30)=w2submn
+      vars(:,31)=w2mn
+      !vars(:,31)=w2submn+w2mn
+      vars(:,32)=skewmn
+      vars(:,33)=u2mn
+      vars(:,34)=v2mn
+      vars(:,35)=thl2mn
+      vars(:,36)=thv2mn
+      vars(:,37)=th2mn
+      vars(:,38)=qt2mn
+      vars(:,39)=ql2mn
+      vars(:,40)=csz
+      vars(:,41)=cfracmn
+      vars(:,42)=hurmn
+      vars(:,43)=qtmn-qlmn
+      vars(:,44)=tamn
+      vars(:,45)=clwmn
+      vars(:,46)=climn
+      vars(:,47)=plwmn
+      vars(:,48)=plimn
 
       do n=1,nsv
-        name = 'svnnnfld.'//cexpnr
-        write (name(3:5),'(i3.3)') n ! TODO apply tracer_props
-        open (ifoutput,file=name,position='append')
-
-        write(ifoutput,'(//2A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-            '#-------------------------------------------------------------' &
-            ,'---------------------------------)' &
-            ,'#',(timeav),'--- AVERAGING TIMESTEP --- ' &
-            ,nhrs,':',nminut,':',nsecs &
-            ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-
-        write (ifoutput,'(2A/A/A/A,I2.2,A,/A/A/2A)') &
-            '#--------------------------------------------------------- ' &
-            ,'--------------' &
-            ,'#               --FIELD &  T E N D E N C I E S  --------    ' &
-            ,'#                                                           ' &
-            ,'#                  |        SCALAR(' &
-            ,n & ! TODO apply tracer_props
-            ,')                  |' &
-            ,'# LEV HEIGHT  PRES      SV(1)      TURB    TOTAL  |' &
-            ,'#      (M)   (MB)  |       -----  (KG/KG/DAY) ----- |' &
-            ,'#----------------------------------------------------------' &
-            ,'-------------'
-        write(ifoutput,'(I4,2F10.2,E14.5e3,2F10.2,E14.5E3)') &
-            (k, &
-              zf       (k), &
-              presf    (k)/100., &
-              svmmn    (k,n), &
-              svptmn   (k,n)  *convt, &
-              svpmn    (k,n)  *convt, &
-              sv2mn    (k,n), &
-              k=1,kmax)
-
-        close(ifoutput)
-
-
-
-  !        -----------------------
-  !        Write the scalar fluxes
-  !        -----------------------
-        name = 'svnnnflx.'//cexpnr
-        write (name(3:5),'(i3.3)') n ! TODO apply tracer_props
-        open (ifoutput,file=name,position='append')
-
-        write(ifoutput,'(//2A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-            '#-------------------------------------------------------------' &
-            ,'---------------------------------)' &
-            ,'#',(timeav),'--- AVERAGING TIMESTEP --- ' &
-            ,nhrs,':',nminut,':',nsecs &
-            ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-        write (ifoutput,'(2A/A/A,I2.2,A,/A/A/2A)') &
-            '#---------------------------------------------------------------' &
-            ,'---------------------------------)' &
-            ,'#                                                               ' &
-            ,'#                 |         TURBULENT FLUXES (SV=',n,')       |' & ! TODO apply tracer_props
-            ,'#LEV HEIGHT  PRES       WSV_SUB     WSV_RES     WSV_TOT' &
-            ,'#     (M)    (MB) | (----------   (KG/KG M/S)   --------------) ' &
-            ,'#---------------------------------------------------------------' &
-            ,'---------------------------------)'
-
-        write(ifoutput,'(I3,2F10.2,3E14.5E3)') &
-            (k, &
-              zh       (k), &
-              presh    (k)/100., &
-              wsvsmn   (k,n)                            , &
-              wsvrmn   (k,n)                            , &
-              wsvtmn   (k,n)                            , &
-              k=1,kmax)
-
-         close(ifoutput)
-
+        vars(:,48+7*(n-1)+1)=svmmn(:,n)
+        vars(:,48+7*(n-1)+2)=svpmn(:,n)
+        vars(:,48+7*(n-1)+3)=svptmn(:,n)
+        vars(:,48+7*(n-1)+4)=sv2mn(:,n)
+        vars(:,48+7*(n-1)+5)=wsvsmn(:,n)
+        vars(:,48+7*(n-1)+6)=wsvrmn(:,n)
+        vars(:,48+7*(n-1)+7)=wsvtmn(:,n)
       end do
-      if (lnetcdf) then
-        vars(:, 1)=rhof
-        vars(:, 2)=rhobf
-        vars(:, 3)=rhobh
-        vars(:, 4)=presh
-        vars(:, 5)=umn
-        vars(:, 6)=vmn
-        vars(:, 7)=wmn
-        vars(:, 8)=thlmn
-        vars(:, 9)=thvmn
-        vars(:,10)=qtmn
-        vars(:,11)=qlmn
-        vars(:,12)=wthlsmn
-        vars(:,13)=wthlrmn
-        vars(:,14)=wthltmn
-        vars(:,15)=wthvsmn
-        vars(:,16)=wthvrmn
-        vars(:,17)=wthvtmn
-        vars(:,18)=wqtsmn
-        vars(:,19)=wqtrmn
-        vars(:,20)=wqttmn
-        vars(:,21)=wqlsmn
-        vars(:,22)=wqlrmn
-        vars(:,23)=wqltmn
-        vars(:,24)=uwsmn
-        vars(:,25)=uwrmn
-        vars(:,26)=uwtmn
-        vars(:,27)=vwsmn
-        vars(:,28)=vwrmn
-        vars(:,29)=vwtmn
-        vars(:,30)=w2submn
-        vars(:,31)=w2mn
-        !vars(:,31)=w2submn+w2mn
-        vars(:,32)=skewmn
-        vars(:,33)=u2mn
-        vars(:,34)=v2mn
-        vars(:,35)=thl2mn
-        vars(:,36)=thv2mn
-        vars(:,37)=th2mn
-        vars(:,38)=qt2mn
-        vars(:,39)=ql2mn
-        vars(:,40)=csz
-        vars(:,41)=cfracmn
-        vars(:,42)=hurmn
-        vars(:,43)=qtmn-qlmn
-        vars(:,44)=tamn
-        vars(:,45)=clwmn
-        vars(:,46)=climn
-        vars(:,47)=plwmn
-        vars(:,48)=plimn
-
-        do n=1,nsv
-          vars(:,48+7*(n-1)+1)=svmmn(:,n)
-          vars(:,48+7*(n-1)+2)=svpmn(:,n)
-          vars(:,48+7*(n-1)+3)=svptmn(:,n)
-          vars(:,48+7*(n-1)+4)=sv2mn(:,n)
-          vars(:,48+7*(n-1)+5)=wsvsmn(:,n)
-          vars(:,48+7*(n-1)+6)=wsvrmn(:,n)
-          vars(:,48+7*(n-1)+7)=wsvtmn(:,n)
-        end do
-        call writestat_nc(ncid,1,tncname,(/rtimee/),nrec,.true.)
-        call writestat_nc(ncid,nvar,ncname,vars(1:kmax,:),nrec,kmax)
-      end if
+      call writestat_nc(ncid,1,tncname,(/rtimee/),nrec,.true.)
+      call writestat_nc(ncid,nvar,ncname,vars(1:kmax,:),nrec,kmax)
 
     end if ! end if(myid==0)
 
@@ -1642,12 +1394,12 @@ contains
 
   subroutine exitgenstat
     use modmpi, only : myid
-    use modstat_nc, only : exitstat_nc,lnetcdf
+    use modstat_nc, only : exitstat_nc
     implicit none
 
     if(.not.(lstat)) return
 
-    if(lnetcdf .and. myid==0) call exitstat_nc(ncid)
+    if(myid==0) call exitstat_nc(ncid)
 
     deallocate(umn       ,vmn, wmn)
     deallocate(thlmn        ,thvmn )

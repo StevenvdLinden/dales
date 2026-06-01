@@ -55,7 +55,6 @@ contains
   subroutine initAGScross
     use modmpi,   only :myid,mpierr,comm3d, D_MPI_BCAST
     use modglobal,only :ifnamopt,fname_options,dtmax, dtav_glob,ladaptive,dt_lim,tres,btime,checknamelisterror
-    use modstat_nc,only : lnetcdf
     use modsurfdata, only : lrsAgs, ksoilmax,lsplitleaf
     use modraddata,only   : irad_par,irad_rrtmg,irad_rte_rrtmgp,iradiation
     use fortran_support, only: nnml_output
@@ -77,10 +76,6 @@ contains
     end if
 
     if (.not. lrsAgs) lAGScross = .false.
-    if (lAGScross .and. .not. lnetcdf) then
-      lAGScross = .false.
-      call warning(routine, 'Ignoring lAGScross, AGScross output implemented only for netcdf output.')
-    end if
 
     call D_MPI_BCAST(dtav     ,1 ,0,comm3d,mpierr)
     call D_MPI_BCAST(lAGScross,1 ,0,comm3d,mpierr)

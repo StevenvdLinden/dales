@@ -65,8 +65,8 @@ contains
   subroutine initquadrant
     use modmpi,    only : comm3d,mpierr,myid,D_MPI_BCAST
     use modglobal, only : ladaptive, dtmax,ifnamopt,fname_options,kmax,   &
-                           dtav_glob,btime,tres,cexpnr,ifoutput,nsv,lwarmstart,checknamelisterror
-    use modstat_nc, only : lnetcdf,define_nc,ncinfo,open_nc,define_nc,ncinfo,nctiminfo,writestat_dims_q_nc
+                           dtav_glob,btime,tres,cexpnr,nsv,lwarmstart,checknamelisterror
+    use modstat_nc, only : define_nc,ncinfo,open_nc,define_nc,ncinfo,nctiminfo,writestat_dims_q_nc
     use fortran_support, only: nnml_output
     implicit none
 
@@ -186,92 +186,80 @@ contains
     wsvsubl   = 0.0
     thlqtcovl = 0.0
 
+    if (myid==0) then
+      call nctiminfo(tncname(1,:))
+      fname(10:12) = cexpnr
+      call open_nc(fname,ncid,nrec,nq=knr)
+      call define_nc(ncid,1,tncname)
+      call writestat_dims_q_nc(ncid,klow,khigh)
+      do isamp=1,isamptot
+        call ncinfo(ncname(           1,:,isamp),'nrsamp_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'number of points','-','qt')
+        call ncinfo(ncname(           2,:,isamp),'uavg_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'horizontal velocity (u)','m/s','qt')
+        call ncinfo(ncname(           3,:,isamp),'vavg_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'horizontal velocity (v)','m/s','qt')
+        call ncinfo(ncname(           4,:,isamp),'wavg_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'vertical velocity','m/s','qt')
+        call ncinfo(ncname(           5,:,isamp),'Umagavg_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'magnitude horizontal velocity','m/s','qt')
+        call ncinfo(ncname(           6,:,isamp),'thlavg_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'liquid water potential temperature','K','qt')
+        call ncinfo(ncname(           7,:,isamp),'qtavg_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'specific humidity','kg/kg','qt')
+        call ncinfo(ncname(           8,:,isamp),'uvar_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'variance of horizontal velocity (u)','m^2/s^2','qt')
+        call ncinfo(ncname(           9,:,isamp),'vvar_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'variance of horizontal velocity (v)','m^2/s^2','qt')
+        call ncinfo(ncname(          10,:,isamp),'wvar_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'variance of vertical velocity','m^2/s^2','qt')
+        call ncinfo(ncname(          11,:,isamp),'Umagvar_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'variance of magnitude horizontal velocity','m^2/s^2','qt')
+        call ncinfo(ncname(          12,:,isamp),'thlvar_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'variance of liquid water potential temperature','K^2','qt')
+        call ncinfo(ncname(          13,:,isamp),'qtvar_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'variance of specific humidity','kg^2/kg^2','qt')
+        do n=1,nsv
+          write (csvname(1:3),'(i3.3)') n
+          call ncinfo(ncname(      13+n,:,isamp),'sv'//csvname//'avg_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'scalar '//csvname//' mixing ratio','ppb','qt')
+          call ncinfo(ncname(  nsv+13+n,:,isamp),'sv'//csvname//'var_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'scalar '//csvname//' variance','ppb^2','qt')
+        end do ! nsv
+        call ncinfo(ncname(    2*nsv+14,:,isamp),'uwr_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'resolved turb. momentum flux (uw)','m^2/s^2','qt')
+        call ncinfo(ncname(    2*nsv+15,:,isamp),'vwr_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'resolved turb. momentum flux (vw)','m^2/s^2','qt')
+        call ncinfo(ncname(    2*nsv+16,:,isamp),'wthlr_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'resolved turb. theta_l flux','K m/s','qt')
+        call ncinfo(ncname(    2*nsv+17,:,isamp),'wqtr_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'resolved turb. moisture flux','kg/kg m/s','qt')
+        call ncinfo(ncname(    2*nsv+18,:,isamp),'uws_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'subgrid turb. momentum flux (uw)','m^2/s^2','qt')
+        call ncinfo(ncname(    2*nsv+19,:,isamp),'vws_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'subgrid turb. momentum flux (vw)','m^2/s^2','qt')
+        call ncinfo(ncname(    2*nsv+20,:,isamp),'wthls_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'subgrid turb. theta_l flux','K m/s','qt')
+        call ncinfo(ncname(    2*nsv+21,:,isamp),'wqts_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'subgrid turb. moisture flux','kg/kg m/s','qt')
+        do n=1,nsv
+          write (csvname(1:3),'(i3.3)') n
+          call ncinfo(ncname(2*nsv+21+n,:,isamp),'wsv'//csvname//'r_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'resolved turb. flux of scalar '//csvname,'ppb m/s','qt')
+          call ncinfo(ncname(3*nsv+21+n,:,isamp),'wsv'//csvname//'s_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'subgrid turb. flux of scalar '//csvname,'ppb m/s','qt')
+        end do ! nsv
+        call ncinfo(ncname(    4*nsv+22,:,isamp),'thlqt_'//samplname(isamp),&
+              trim(longsamplname(isamp))//' '//'covariance between theta_l and q','K kg/kg','qt')
 
-    if(myid==0 .and. .not. lwarmstart)then
-      do isamp = 1,isamptot
-        open (ifoutput,file=trim(samplname(isamp))//'quadrant.'//cexpnr,status='replace')
-        close (ifoutput)
-      enddo
-    endif
-
-    if (lnetcdf) then
-      if (myid==0) then
-        call nctiminfo(tncname(1,:))
-        fname(10:12) = cexpnr
-        call open_nc(fname,ncid,nrec,nq=knr)
-        call define_nc(ncid,1,tncname)
-        call writestat_dims_q_nc(ncid,klow,khigh)
-        do isamp=1,isamptot
-          call ncinfo(ncname(           1,:,isamp),'nrsamp_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'number of points','-','qt')
-          call ncinfo(ncname(           2,:,isamp),'uavg_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'horizontal velocity (u)','m/s','qt')
-          call ncinfo(ncname(           3,:,isamp),'vavg_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'horizontal velocity (v)','m/s','qt')
-          call ncinfo(ncname(           4,:,isamp),'wavg_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'vertical velocity','m/s','qt')
-          call ncinfo(ncname(           5,:,isamp),'Umagavg_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'magnitude horizontal velocity','m/s','qt')
-          call ncinfo(ncname(           6,:,isamp),'thlavg_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'liquid water potential temperature','K','qt')
-          call ncinfo(ncname(           7,:,isamp),'qtavg_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'specific humidity','kg/kg','qt')
-          call ncinfo(ncname(           8,:,isamp),'uvar_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'variance of horizontal velocity (u)','m^2/s^2','qt')
-          call ncinfo(ncname(           9,:,isamp),'vvar_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'variance of horizontal velocity (v)','m^2/s^2','qt')
-          call ncinfo(ncname(          10,:,isamp),'wvar_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'variance of vertical velocity','m^2/s^2','qt')
-          call ncinfo(ncname(          11,:,isamp),'Umagvar_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'variance of magnitude horizontal velocity','m^2/s^2','qt')
-          call ncinfo(ncname(          12,:,isamp),'thlvar_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'variance of liquid water potential temperature','K^2','qt')
-          call ncinfo(ncname(          13,:,isamp),'qtvar_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'variance of specific humidity','kg^2/kg^2','qt')
-          do n=1,nsv
-            write (csvname(1:3),'(i3.3)') n
-            call ncinfo(ncname(      13+n,:,isamp),'sv'//csvname//'avg_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'scalar '//csvname//' mixing ratio','ppb','qt')
-            call ncinfo(ncname(  nsv+13+n,:,isamp),'sv'//csvname//'var_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'scalar '//csvname//' variance','ppb^2','qt')
-          end do ! nsv
-          call ncinfo(ncname(    2*nsv+14,:,isamp),'uwr_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'resolved turb. momentum flux (uw)','m^2/s^2','qt')
-          call ncinfo(ncname(    2*nsv+15,:,isamp),'vwr_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'resolved turb. momentum flux (vw)','m^2/s^2','qt')
-          call ncinfo(ncname(    2*nsv+16,:,isamp),'wthlr_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'resolved turb. theta_l flux','K m/s','qt')
-          call ncinfo(ncname(    2*nsv+17,:,isamp),'wqtr_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'resolved turb. moisture flux','kg/kg m/s','qt')
-          call ncinfo(ncname(    2*nsv+18,:,isamp),'uws_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'subgrid turb. momentum flux (uw)','m^2/s^2','qt')
-          call ncinfo(ncname(    2*nsv+19,:,isamp),'vws_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'subgrid turb. momentum flux (vw)','m^2/s^2','qt')
-          call ncinfo(ncname(    2*nsv+20,:,isamp),'wthls_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'subgrid turb. theta_l flux','K m/s','qt')
-          call ncinfo(ncname(    2*nsv+21,:,isamp),'wqts_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'subgrid turb. moisture flux','kg/kg m/s','qt')
-          do n=1,nsv
-            write (csvname(1:3),'(i3.3)') n
-            call ncinfo(ncname(2*nsv+21+n,:,isamp),'wsv'//csvname//'r_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'resolved turb. flux of scalar '//csvname,'ppb m/s','qt')
-            call ncinfo(ncname(3*nsv+21+n,:,isamp),'wsv'//csvname//'s_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'subgrid turb. flux of scalar '//csvname,'ppb m/s','qt')
-          end do ! nsv
-          call ncinfo(ncname(    4*nsv+22,:,isamp),'thlqt_'//samplname(isamp),&
-               trim(longsamplname(isamp))//' '//'covariance between theta_l and q','K kg/kg','qt')
-
-          call define_nc( ncid, nvar, ncname(:,:,isamp))
-        end do ! isamp
-      end if ! myid = 0
-
-    end if ! lnetcdf
-
+        call define_nc( ncid, nvar, ncname(:,:,isamp))
+      end do ! isamp
+    end if ! myid = 0
 
   end subroutine initquadrant
-!> Cleans up after the run
+  
+  !> Cleans up after the run
   subroutine exitquadrant
-    use modstat_nc, only : lnetcdf
     use modmpi,     only : myid
     implicit none
 
@@ -285,7 +273,7 @@ contains
     deallocate(wusubl,wvsubl,wthlsubl,wqtsubl           )
     deallocate(wsvresl,wsvsubl                          )
     deallocate(thlqtcovl                                )
-    if (lnetcdf .and. myid==0) deallocate(ncname)
+    if (myid==0) deallocate(ncname)
 
   end subroutine exitquadrant
 
@@ -561,10 +549,10 @@ contains
 !> Write the statistics to file
   subroutine writequadrant
 
-    use modglobal, only : rtimee,zh,cexpnr,ifoutput,ijtot,nsv
+    use modglobal, only : rtimee,zh,cexpnr,ijtot,nsv
     use modfields, only : presh
     use modmpi,    only : myid,comm3d,mpierr,mpi_sum,D_MPI_ALLREDUCE
-    use modstat_nc, only: lnetcdf, writestat_nc,nc_fillvalue
+    use modstat_nc, only: writestat_nc,nc_fillvalue
 
     implicit none
     real, allocatable, dimension(:,:)          :: vars
@@ -641,7 +629,7 @@ contains
     call D_MPI_ALLREDUCE(wsvsubl  ,wsvsub  ,isamptot*knr*nsv,MPI_SUM,comm3d,mpierr)
     call D_MPI_ALLREDUCE(thlqtcovl,thlqtcov,isamptot*knr    ,MPI_SUM,comm3d,mpierr)
 
-!reset variables
+    !reset variables
     nrsampl   = 0.0
     uavl      = 0.0
     vavl      = 0.0
@@ -670,9 +658,8 @@ contains
     thlqtcovl = 0.0
 
     if (myid==0) then
-      if (lnetcdf) then
-        call writestat_nc(ncid,1,tncname,(/rtimee/),nrec,.true.)
-      endif
+      
+      call writestat_nc(ncid,1,tncname,(/rtimee/),nrec,.true.)
 
       perc         = 0.0
       uavgnorm     = 0.0
@@ -701,7 +688,7 @@ contains
       wsvsubnorm   = 0.0
       thlqtcovnorm = 0.0
 
-!normalize variables
+      !normalize variables
       perc         = nrsamp / inorm
 
       where (nrsamp .GT. 0)
@@ -737,121 +724,45 @@ contains
         end where
       end do ! nsv
 
-
-!write files
+      !write files
       do isamp = 1,isamptot
-        open (ifoutput,file=trim(samplname(isamp))//'quadrant.'//cexpnr,position='append')
-        write(ifoutput,'(//3A,/A,I5,A,I4,A,I2,A,I2,A)') &
-          '#-------------------------- ',trim(longsamplname(isamp)),' ---------------------------'      &
-          ,'#',nint(timeav),' --- AVERAGING TIMESTEP --- '      &
-          ,nhrs,':',nminut,':',nsecs      &
-          ,'   HRS:MIN:SEC AFTER INITIALIZATION '
+        vars               = nc_fillvalue
+        vars(:,1)          = nrsamp(:,isamp)
 
-        write (ifoutput,'(A/4A)') &
-           '#-------------------------------------------------------------------------------' &
-           ,'# LEV   HEIGHT  PRESS.    SAMPLES    FRACTION ' &
-           ,'       u_avg        v_avg        w_avg      |U|_avg  theta_l_avg       qt_avg        u_var ' &
-           ,'       v_var        w_var      |U|_var  theta_l_var       qt_var  resolved wu   subgrid wu ' &
-           ,' resolved wv   subgrid wv res. wthetal sub. wthetal  resolved wq   subgrid wq  cov(th_l,q)'
-        do k=klow,khigh
-          write(ifoutput,'(i5,1X,F8.2,1X,F7.2,1X,i10,1X,E11.4,21(1X,E12.5))') &
-              k                      , &
-              zh           (k)       , &
-              presh        (k)/100.  , &
-              nint(nrsamp  (k,isamp)), &
-              perc         (k,isamp) , &
-              uavgnorm     (k,isamp) , &
-              vavgnorm     (k,isamp) , &
-              wavgnorm     (k,isamp) , &
-              utotavgnorm  (k,isamp) , &
-              thlavgnorm   (k,isamp) , &
-              qtavgnorm    (k,isamp) , &
-              uvarnorm     (k,isamp) , &
-              vvarnorm     (k,isamp) , &
-              wvarnorm     (k,isamp) , &
-              utotvarnorm  (k,isamp) , &
-              thlvarnorm   (k,isamp) , &
-              qtvarnorm    (k,isamp) , &
-              wuresnorm    (k,isamp) , &
-              wusubnorm    (k,isamp) , &
-              wvresnorm    (k,isamp) , &
-              wvsubnorm    (k,isamp) , &
-              wthlresnorm  (k,isamp) , &
-              wthlsubnorm  (k,isamp) , &
-              wqtresnorm   (k,isamp) , &
-              wqtsubnorm   (k,isamp) , &
-              thlqtcovnorm (k,isamp)
-        end do ! klow - khigh
-        close(ifoutput)
+        where (nrsamp(:,isamp) .gt. 0)
+          vars(:,       2) = uavgnorm     (:,isamp)
+          vars(:,       3) = vavgnorm     (:,isamp)
+          vars(:,       4) = wavgnorm     (:,isamp)
+          vars(:,       5) = utotavgnorm  (:,isamp)
+          vars(:,       6) = thlavgnorm   (:,isamp)
+          vars(:,       7) = qtavgnorm    (:,isamp)
+          vars(:,       8) = uvarnorm     (:,isamp)
+          vars(:,       9) = vvarnorm     (:,isamp)
+          vars(:,      10) = wvarnorm     (:,isamp)
+          vars(:,      11) = utotvarnorm  (:,isamp)
+          vars(:,      12) = thlvarnorm   (:,isamp)
+          vars(:,      13) = qtvarnorm    (:,isamp)
+          vars(:,2*nsv+14) = wuresnorm    (:,isamp)
+          vars(:,2*nsv+15) = wvresnorm    (:,isamp)
+          vars(:,2*nsv+16) = wthlresnorm  (:,isamp)
+          vars(:,2*nsv+17) = wqtresnorm   (:,isamp)
+          vars(:,2*nsv+18) = wusubnorm    (:,isamp)
+          vars(:,2*nsv+19) = wvsubnorm    (:,isamp)
+          vars(:,2*nsv+20) = wthlsubnorm  (:,isamp)
+          vars(:,2*nsv+21) = wqtsubnorm   (:,isamp)
+          vars(:,4*nsv+22) = thlqtcovnorm (:,isamp)
+        end where
 
         do n=1,nsv
-          write (csvname(1:3),'(i3.3)') n
-          open (ifoutput,file=trim(samplname(isamp))//'quadrantsv'//csvname//'.'//cexpnr,position='append')
-          write(ifoutput,'(//3A,I4,A,/A,I5,A,I4,A,I2,A,I2,A)') &
-            '#--------------------- ',trim(longsamplname(isamp)),' : scalar ',n,' ----------------------'      &
-            ,'#',nint(timeav),' --- AVERAGING TIMESTEP --- '      &
-            ,nhrs,':',nminut,':',nsecs      &
-            ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-
-          write (ifoutput,'(A/2A)') &
-             '#-------------------------------------------------------------------------------' &
-             ,'# LEV   HEIGHT  PRESS.    SAMPLES    FRACTION ' &
-             ,'     AVERAGE     VARIANCE RESOLV. FLUX   SUBG. FLUX'
-          do k=klow,khigh
-            write(ifoutput,'(i5,1X,F8.2,1X,F7.2,1X,i10,1X,E11.4,4(1X,E12.5))') &
-                k                        , &
-                zh           (k)         , &
-                presh        (k)/100.    , &
-                nint(nrsamp  (k,isamp))  , &
-                perc         (k,isamp)   , &
-                svavgnorm    (k,n,isamp) , &
-                svvarnorm    (k,n,isamp) , &
-                wsvresnorm   (k,n,isamp) , &
-                wsvsubnorm   (k,n,isamp)
-          end do ! klow - khigh
-          close(ifoutput)
+          where (nrsamp(:,isamp) .gt. 0)
+            vars(:,      13+n) = svavgnorm (:,n,isamp)
+            vars(:,  nsv+13+n) = svvarnorm (:,n,isamp)
+            vars(:,2*nsv+21+n) = wsvresnorm(:,n,isamp)
+            vars(:,3*nsv+21+n) = wsvsubnorm(:,n,isamp)
+          end where
         end do ! nsv
 
-
-        if (lnetcdf) then
-          vars               = nc_fillvalue
-          vars(:,1)          = nrsamp(:,isamp)
-
-          where (nrsamp(:,isamp) .gt. 0)
-            vars(:,       2) = uavgnorm     (:,isamp)
-            vars(:,       3) = vavgnorm     (:,isamp)
-            vars(:,       4) = wavgnorm     (:,isamp)
-            vars(:,       5) = utotavgnorm  (:,isamp)
-            vars(:,       6) = thlavgnorm   (:,isamp)
-            vars(:,       7) = qtavgnorm    (:,isamp)
-            vars(:,       8) = uvarnorm     (:,isamp)
-            vars(:,       9) = vvarnorm     (:,isamp)
-            vars(:,      10) = wvarnorm     (:,isamp)
-            vars(:,      11) = utotvarnorm  (:,isamp)
-            vars(:,      12) = thlvarnorm   (:,isamp)
-            vars(:,      13) = qtvarnorm    (:,isamp)
-            vars(:,2*nsv+14) = wuresnorm    (:,isamp)
-            vars(:,2*nsv+15) = wvresnorm    (:,isamp)
-            vars(:,2*nsv+16) = wthlresnorm  (:,isamp)
-            vars(:,2*nsv+17) = wqtresnorm   (:,isamp)
-            vars(:,2*nsv+18) = wusubnorm    (:,isamp)
-            vars(:,2*nsv+19) = wvsubnorm    (:,isamp)
-            vars(:,2*nsv+20) = wthlsubnorm  (:,isamp)
-            vars(:,2*nsv+21) = wqtsubnorm   (:,isamp)
-            vars(:,4*nsv+22) = thlqtcovnorm (:,isamp)
-          end where
-
-          do n=1,nsv
-            where (nrsamp(:,isamp) .gt. 0)
-              vars(:,      13+n) = svavgnorm (:,n,isamp)
-              vars(:,  nsv+13+n) = svvarnorm (:,n,isamp)
-              vars(:,2*nsv+21+n) = wsvresnorm(:,n,isamp)
-              vars(:,3*nsv+21+n) = wsvsubnorm(:,n,isamp)
-            end where
-          end do ! nsv
-
-          call writestat_nc(ncid,nvar,ncname(:,:,isamp),vars(klow:khigh,:),nrec,knr)
-        end if ! lnetcdf
+        call writestat_nc(ncid,nvar,ncname(:,:,isamp),vars(klow:khigh,:),nrec,knr)
 
       end do ! isamp
     end if ! myid = 0

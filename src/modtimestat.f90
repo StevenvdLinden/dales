@@ -94,7 +94,7 @@ contains
                           ih ,jh
     use modfields, only : thlprof,qtprof,svprof
     use modsurfdata, only : isurf, lhetero, xpatches, ypatches
-    use modstat_nc, only : lnetcdf, open_nc, define_nc, ncinfo, nctiminfo
+    use modstat_nc, only : open_nc, define_nc, ncinfo, nctiminfo
     use modraddata, only : iradiation
     use modlsm, only : lags
     use fortran_support, only: nnml_output
@@ -192,158 +192,87 @@ contains
     end select
 
     if(myid==0) then
-       if (.not. lwarmstart) then
-          !tmser1
-          open (ifoutput,file='tmser1.'//cexpnr,status='replace',position='append')
-          write(ifoutput,'(2a)') &
-               '#  time      cc     z_cbase    z_ctop_avg  z_ctop_max      zi         we', &
-               '   <<ql>>  <<ql>>_max   w_max   tke     ql_max'
-          close(ifoutput)
-          !tmsurf
-          open (ifoutput,file='tmsurf.'//cexpnr,status='replace',position='append')
-          write(ifoutput,'(2a)') &
-               '#  time        ust        tst        qst         obukh', &
-               '      thls        z0        wthls      wthvs      wqls '
-          close(ifoutput)
-          if(isurf == 1) then
-             open (ifoutput,file='tmlsm.'//cexpnr,status='replace',position='append')
-             write(ifoutput,'(4a)') &
-                  '#     time      Qnet        H          LE         G0  ', &
-                  '   tendskin     rs         ra        tskin        cliq  ', &
-                  '    Wl          rssoil     rsveg       Resp       wco2         An', &
-                  '    gcco2'
-             write(ifoutput,'(4a)') &
-                  '#      [s]     [W/m2]     [W/m2]     [W/m2]     [W/m2]', &
-                  '   [W/m2]      [s/m]       [s/m]     [K]          [-]   ', &
-                  '   [m]          [s/m]      [s/m]   [mgCm2/s]               [mgCm2/s]',&
-                  '   [m/s]  '
-             close(ifoutput)
-          end if
+      allocate(ncname(nvar,4))
 
-          if(lhetero) then
-             do i=1,xpatches
-                do j=1,ypatches
-                   name = 'tmser1patchiiixjjj.'//cexpnr
-                   write (name(12:14),'(i3.3)') i
-                   write (name(16:18),'(i3.3)') j
-                   open (ifoutput,file=name,status='replace',position='append')
-                   write(ifoutput,'(2a)') &
-                        '#  time      cc     z_cbase    z_ctop_avg  z_ctop_max      zi         we', &
-                        '   <<ql>>  <<ql>>_max   w_max   tke     ql_max'
-                   close(ifoutput)
+      fname(7:9) = cexpnr
+      call nctiminfo(ncname(1,:))
+      call ncinfo(ncname( 2,:),'cfrac','Cloud fraction','-','time')
+      call ncinfo(ncname( 3,:),'zb','Cloud-base height','m','time')
+      call ncinfo(ncname( 4,:),'zc_av','Average Cloud-top height','m','time')
+      call ncinfo(ncname( 5,:),'zc_max','Maximum Cloud-top height','m','time')
+      call ncinfo(ncname( 6,:),'zi','Boundary layer height','m','time')
+      call ncinfo(ncname( 7,:),'we','Entrainment velocity','m/s','time')
+      call ncinfo(ncname( 8,:),'lwp_bar','Liquid-water path','kg/m^2','time')
+      call ncinfo(ncname( 9,:),'lwp_max','Maximum Liquid-water path','kg/m^2','time')
+      call ncinfo(ncname(10,:),'wmax','Maximum vertical velocity','m/s','time')
+      call ncinfo(ncname(11,:),'vtke','Vertical integral of total TKE','kg/s^2','time')
+      call ncinfo(ncname(12,:),'lmax','Maximum liquid water specific humidity','kg/kg','time')
+      call ncinfo(ncname(13,:),'ustar','Surface friction velocity','m/s','time')
+      call ncinfo(ncname(14,:),'tstr','Turbulent temperature scale','K','time')
+      call ncinfo(ncname(15,:),'qtstr','Turbulent humidity scale','K','time')
+      call ncinfo(ncname(16,:),'obukh','Obukhov Length','m','time')
+      call ncinfo(ncname(17,:),'thlskin','Surface liquid water potential temperature','K','time')
+      call ncinfo(ncname(18,:),'z0','Roughness height','m','time')
+      call ncinfo(ncname(19,:),'wtheta','Surface kinematic temperature flux','K m/s','time')
+      call ncinfo(ncname(20,:),'wthetav','Surface kinematic virtual temperature flux','K m/s','time')
+      call ncinfo(ncname(21,:),'wq','Surface kinematic moisture flux','kg/kg m/s','time')
+      call ncinfo(ncname(22,:),'twp_bar','Total water path','kg/m^2','time')
+      call ncinfo(ncname(23,:),'rwp_bar','Rain water path','kg/m^2','time')
+      call ncinfo(ncname(24,:),'pr','surface precipitation rate','kg/m^2/s','time')
 
-                   name = 'tmsurfpatchiiixjjj.'//cexpnr
-                   write (name(12:14),'(i3.3)') i
-                   write (name(16:18),'(i3.3)') j
-                   open (ifoutput,file=name,status='replace',position='append')
-                   write(ifoutput,'(2a)') &
-                        '#  time        ust        tst        qst         obukh', &
-                        '      thls        z0        wthls      wthvs      wqls '
-                   close(ifoutput)
+      if(isurf==1) then
+        call ncinfo(ncname(25,:),'Qnet','Net radiation','W/m^2','time')
+        call ncinfo(ncname(26,:),'H','Sensible heat flux','W/m^2','time')
+        call ncinfo(ncname(27,:),'LE','Latent heat flux','W/m^2','time')
+        call ncinfo(ncname(28,:),'G0','Ground heat flux','W/m^2','time')
+        call ncinfo(ncname(29,:),'tendskin','Skin tendency','W/m^2','time')
+        call ncinfo(ncname(30,:),'rs','Surface resistance','s/m','time')
+        call ncinfo(ncname(31,:),'ra','Aerodynamic resistance','s/m','time')
+        call ncinfo(ncname(32,:),'cliq','Fraction of vegetated surface covered with liquid water','-','time')
+        call ncinfo(ncname(33,:),'Wl','Liquid water reservoir','m','time')
+        call ncinfo(ncname(34,:),'rssoil','Soil evaporation resistance','s/m','time')
+        call ncinfo(ncname(35,:),'rsveg','Vegitation resistance','s/m','time')
+      else if (isurf == 11) then
+        call ncinfo(ncname(25,:),'Qnet','Net radiation','W/m^2','time')
+        call ncinfo(ncname(26,:),'H','Sensible heat flux','W/m^2','time')
+        call ncinfo(ncname(27,:),'LE','Latent heat flux','W/m^2','time')
+        call ncinfo(ncname(28,:),'G','Ground heat flux','W/m^2','time')
+        call ncinfo(ncname(29,:),'f1','Reduction canopy resistance f(swd)','-','time')
+        call ncinfo(ncname(30,:),'f2b','Reduction soil resistance f(theta)','-','time')
+        call ncinfo(ncname(31,:),'wl','Liquid water reservoir','m','time')
 
-                   if(isurf == 1) then
-                      name = 'tmlsmpatchiiixjjj.'//cexpnr
-                      write (name(11:13),'(i3.3)') i
-                      write (name(15:17),'(i3.3)') j
-                      open (ifoutput,file=name,status='replace',position='append')
-                      write(ifoutput,'(3a)') &
-                           '#     time      Qnet        H          LE         G0  ', &
-                           '   tendskin     rs         ra        tskin        cliq  ', &
-                           '    Wl          rssoil     rsveg'
-                      write(ifoutput,'(3a)') &
-                           '#      [s]     [W/m2]     [W/m2]     [W/m2]     [W/m2]', &
-                           '   [W/m2]      [s/m]       [s/m]     [K]          [-]   ', &
-                           '   [m]          [s/m]      [s/m]'
-                      close(ifoutput)
-                   endif
-                enddo
-             enddo
-          endif
-       endif
-
-       if (lnetcdf) then
-        allocate(ncname(nvar,4))
-
-        fname(7:9) = cexpnr
-        call nctiminfo(ncname(1,:))
-        call ncinfo(ncname( 2,:),'cfrac','Cloud fraction','-','time')
-        call ncinfo(ncname( 3,:),'zb','Cloud-base height','m','time')
-        call ncinfo(ncname( 4,:),'zc_av','Average Cloud-top height','m','time')
-        call ncinfo(ncname( 5,:),'zc_max','Maximum Cloud-top height','m','time')
-        call ncinfo(ncname( 6,:),'zi','Boundary layer height','m','time')
-        call ncinfo(ncname( 7,:),'we','Entrainment velocity','m/s','time')
-        call ncinfo(ncname( 8,:),'lwp_bar','Liquid-water path','kg/m^2','time')
-        call ncinfo(ncname( 9,:),'lwp_max','Maximum Liquid-water path','kg/m^2','time')
-        call ncinfo(ncname(10,:),'wmax','Maximum vertical velocity','m/s','time')
-        call ncinfo(ncname(11,:),'vtke','Vertical integral of total TKE','kg/s^2','time')
-        call ncinfo(ncname(12,:),'lmax','Maximum liquid water specific humidity','kg/kg','time')
-        call ncinfo(ncname(13,:),'ustar','Surface friction velocity','m/s','time')
-        call ncinfo(ncname(14,:),'tstr','Turbulent temperature scale','K','time')
-        call ncinfo(ncname(15,:),'qtstr','Turbulent humidity scale','K','time')
-        call ncinfo(ncname(16,:),'obukh','Obukhov Length','m','time')
-        call ncinfo(ncname(17,:),'thlskin','Surface liquid water potential temperature','K','time')
-        call ncinfo(ncname(18,:),'z0','Roughness height','m','time')
-        call ncinfo(ncname(19,:),'wtheta','Surface kinematic temperature flux','K m/s','time')
-        call ncinfo(ncname(20,:),'wthetav','Surface kinematic virtual temperature flux','K m/s','time')
-        call ncinfo(ncname(21,:),'wq','Surface kinematic moisture flux','kg/kg m/s','time')
-        call ncinfo(ncname(22,:),'twp_bar','Total water path','kg/m^2','time')
-        call ncinfo(ncname(23,:),'rwp_bar','Rain water path','kg/m^2','time')
-        call ncinfo(ncname(24,:),'pr','surface precipitation rate','kg/m^2/s','time')
-
-        if(isurf==1) then
-          call ncinfo(ncname(25,:),'Qnet','Net radiation','W/m^2','time')
-          call ncinfo(ncname(26,:),'H','Sensible heat flux','W/m^2','time')
-          call ncinfo(ncname(27,:),'LE','Latent heat flux','W/m^2','time')
-          call ncinfo(ncname(28,:),'G0','Ground heat flux','W/m^2','time')
-          call ncinfo(ncname(29,:),'tendskin','Skin tendency','W/m^2','time')
-          call ncinfo(ncname(30,:),'rs','Surface resistance','s/m','time')
-          call ncinfo(ncname(31,:),'ra','Aerodynamic resistance','s/m','time')
-          call ncinfo(ncname(32,:),'cliq','Fraction of vegetated surface covered with liquid water','-','time')
-          call ncinfo(ncname(33,:),'Wl','Liquid water reservoir','m','time')
-          call ncinfo(ncname(34,:),'rssoil','Soil evaporation resistance','s/m','time')
-          call ncinfo(ncname(35,:),'rsveg','Vegitation resistance','s/m','time')
-        else if (isurf == 11) then
-          call ncinfo(ncname(25,:),'Qnet','Net radiation','W/m^2','time')
-          call ncinfo(ncname(26,:),'H','Sensible heat flux','W/m^2','time')
-          call ncinfo(ncname(27,:),'LE','Latent heat flux','W/m^2','time')
-          call ncinfo(ncname(28,:),'G','Ground heat flux','W/m^2','time')
-          call ncinfo(ncname(29,:),'f1','Reduction canopy resistance f(swd)','-','time')
-          call ncinfo(ncname(30,:),'f2b','Reduction soil resistance f(theta)','-','time')
-          call ncinfo(ncname(31,:),'wl','Liquid water reservoir','m','time')
-
-          if (lags) then
-            call ncinfo(ncname(32,:),'an_co2','Net CO2 assimilation','ppb m s-1','time')
-            call ncinfo(ncname(33,:),'resp_co2','CO2 respiration soil','ppb m s-1','time')
-          end if
+        if (lags) then
+          call ncinfo(ncname(32,:),'an_co2','Net CO2 assimilation','ppb m s-1','time')
+          call ncinfo(ncname(33,:),'resp_co2','CO2 respiration soil','ppb m s-1','time')
         end if
-
-        if (iradiation /= 0) then
-          call ncinfo(ncname(ivar_rad+ 0,:),'rlds',   'surface downwelling longwave flux','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+ 1,:),'rlus',   'surface upwelling longwave flux','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+ 2,:),'rsds',   'surface downwelling shortwave flux','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+ 3,:),'rsus',   'surface upwelling shortwave flux','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+ 4,:),'rsdscs', 'surface downwelling shortwave flux - clear sky','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+ 5,:),'rsuscs', 'surface upwelling shortwave flux - clear sky','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+ 6,:),'rldscs', 'surface downwelling longwave flux - clear sky','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+ 7,:),'rluscs', 'surface upwelling longwave flux - clear sky','W/m^2','time')
-
-          call ncinfo(ncname(ivar_rad+ 8,:),'rsdt',   'TOA incoming shortwave flux','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+ 9,:),'rsut',   'TOA outgoing shortwave flux','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+10,:),'rlut',   'TOA outgoing longwave flux','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+11,:),'rsutcs', 'TOA outgoing shortwave flux -clear sky','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+12,:),'rlutcs', 'TOA outgoing longwave flux -clear sky','W/m^2','time')
-
-          call ncinfo(ncname(ivar_rad+13,:),'rsdtm',  'TOM incoming shortwave flux','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+14,:),'rldtm',  'TOM incoming longwave flux','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+15,:),'rsutm',  'TOM outgoing shortwave flux','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+16,:),'rlutm',  'TOM outgoing longwave flux','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+17,:),'rsutmcs','TOM outgoing shortwave flux -clear sky','W/m^2','time')
-          call ncinfo(ncname(ivar_rad+18,:),'rlutmcs','TOM outgoing longwave flux -clear sky','W/m^2','time')
-        end if
-
-        call open_nc(fname,  ncid,nrec)
-        if(nrec==0) call define_nc( ncid, NVar, ncname)
       end if
+
+      if (iradiation /= 0) then
+        call ncinfo(ncname(ivar_rad+ 0,:),'rlds',   'surface downwelling longwave flux','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+ 1,:),'rlus',   'surface upwelling longwave flux','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+ 2,:),'rsds',   'surface downwelling shortwave flux','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+ 3,:),'rsus',   'surface upwelling shortwave flux','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+ 4,:),'rsdscs', 'surface downwelling shortwave flux - clear sky','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+ 5,:),'rsuscs', 'surface upwelling shortwave flux - clear sky','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+ 6,:),'rldscs', 'surface downwelling longwave flux - clear sky','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+ 7,:),'rluscs', 'surface upwelling longwave flux - clear sky','W/m^2','time')
+
+        call ncinfo(ncname(ivar_rad+ 8,:),'rsdt',   'TOA incoming shortwave flux','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+ 9,:),'rsut',   'TOA outgoing shortwave flux','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+10,:),'rlut',   'TOA outgoing longwave flux','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+11,:),'rsutcs', 'TOA outgoing shortwave flux -clear sky','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+12,:),'rlutcs', 'TOA outgoing longwave flux -clear sky','W/m^2','time')
+
+        call ncinfo(ncname(ivar_rad+13,:),'rsdtm',  'TOM incoming shortwave flux','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+14,:),'rldtm',  'TOM incoming longwave flux','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+15,:),'rsutm',  'TOM outgoing shortwave flux','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+16,:),'rlutm',  'TOM outgoing longwave flux','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+17,:),'rsutmcs','TOM outgoing shortwave flux -clear sky','W/m^2','time')
+        call ncinfo(ncname(ivar_rad+18,:),'rlutmcs','TOM outgoing longwave flux -clear sky','W/m^2','time')
+      end if
+
+      call open_nc(fname,  ncid,nrec)
+      if(nrec==0) call define_nc( ncid, NVar, ncname)
     end if
 
     if (lhetero) then
@@ -420,7 +349,7 @@ contains
                            lhetero, xpatches, ypatches, qts_patch, wt_patch, wq_patch, thls_patch,obl,z0mav_patch, wco2av, Anav, Respav,gcco2av
     use modsurface, only : patchxnr,patchynr
     use modmpi,     only : mpi_sum,mpi_max,mpi_min,comm3d,mpierr,myid, D_MPI_ALLREDUCE
-    use modstat_nc,  only : lnetcdf, writestat_nc,nc_fillvalue
+    use modstat_nc,  only : writestat_nc,nc_fillvalue
     use modlsm,     only : tile, f1, f2b, nlu, lags, an_co2, resp_co2
 #if defined(_OPENACC)
     use modgpu, only: update_host
@@ -1179,120 +1108,64 @@ contains
   !  9.8  write the results to output file
   !     ---------------------------------------
 
-    if(myid==0)then
-       !tmser1
-      open (ifoutput,file='tmser1.'//cexpnr,position='append')
-      write( ifoutput,'(f10.2,f6.3,4f12.3,f10.4,5f9.3)') &
-          rtimee, &
-          cc, &
-          zbaseav, &
-          ztopav, &
-          ztopmax, &
-          zi, &
-          we, &
-          qlintav*1000., &
-          qlintmax*1000., &
-          wmax, &
-          tke_tot, &
-          qlmax*1000.
-      close(ifoutput)
+    if (myid==0) then
 
-      !tmsurf
-      open (ifoutput,file='tmsurf.'//cexpnr,position='append')
-      write( ifoutput,'(f10.2,4e11.3,f11.3,4e11.3)') &
-          rtimee   ,&
-          ust     ,&
-          tst     ,&
-          qst     ,&
-          oblav   ,&
-          thls    ,&
-          z0      ,&
-          wts     ,&
-          wthvs    ,&
-          wqls
-      close(ifoutput)
+      vars( 1) = rtimee
+      vars( 2) = cc
+      vars( 3) = zbaseav
+      if (vars(3)<eps1) vars(3) = nc_fillvalue
+      vars( 4) = ztopav
+      if (vars(4)<eps1) vars(4) = nc_fillvalue
+      vars( 5) = ztopmax
+      if (vars(5)<eps1) vars(5) = nc_fillvalue
+      vars( 6) = zi
+      vars( 7) = we
+      vars( 8) = qlintav
+      vars( 9) = qlintmax
+      vars(10) = wmax
+      vars(11) = tke_tot
+      vars(12) = qlmax
+      vars(13) = ust
+      vars(14) = tst
+      vars(15) = qst
+      vars(16) = oblav
+      vars(17) = thls
+      vars(18) = z0
+      vars(19) = wts
+      vars(20) = wthvs
+      vars(21) = wqls
+      vars(22) = qtintav
+      vars(23) = qrintav
+      vars(24) = prav
 
       if (isurf == 1) then
-        !tmlsm
-        open (ifoutput,file='tmlsm.'//cexpnr,position='append')
-        write(ifoutput,'(f10.2,9f11.3,e13.3, 5f11.3,e13.3)') &
-            rtimee       ,&
-            Qnetav      ,&
-            Hav         ,&
-            LEav        ,&
-            G0av        ,&
-            tendskinav  ,&
-            rsav        ,&
-            raav        ,&
-            tskinav     ,&
-            cliqav      ,&
-            wlav        ,&
-            rssoilav    ,&
-            rsvegav     ,&
-            Respav      ,&
-            wco2av      ,&
-            Anav        ,&
-            gcco2av
-        close(ifoutput)
-      end if
-      if (lnetcdf) then
-        vars( 1) = rtimee
-        vars( 2) = cc
-        vars( 3) = zbaseav
-        if (vars(3)<eps1) vars(3) = nc_fillvalue
-        vars( 4) = ztopav
-        if (vars(4)<eps1) vars(4) = nc_fillvalue
-        vars( 5) = ztopmax
-        if (vars(5)<eps1) vars(5) = nc_fillvalue
-        vars( 6) = zi
-        vars( 7) = we
-        vars( 8) = qlintav
-        vars( 9) = qlintmax
-        vars(10) = wmax
-        vars(11) = tke_tot
-        vars(12) = qlmax
-        vars(13) = ust
-        vars(14) = tst
-        vars(15) = qst
-        vars(16) = oblav
-        vars(17) = thls
-        vars(18) = z0
-        vars(19) = wts
-        vars(20) = wthvs
-        vars(21) = wqls
-        vars(22) = qtintav
-        vars(23) = qrintav
-        vars(24) = prav
+        vars(25) = Qnetav
+        vars(26) = Hav
+        vars(27) = LEav
+        vars(28) = G0av
+        vars(29) = tendskinav
+        vars(30) = rsav
+        vars(31) = raav
+        vars(32) = cliqav
+        vars(33) = wlav
+        vars(34) = rssoilav
+        vars(35) = rsvegav
+      else if (isurf == 11) then
+        vars(25) = Qnetav
+        vars(26) = Hav
+        vars(27) = LEav
+        vars(28) = G0av
+        vars(29) = f1_av
+        vars(30) = f2b_av
+        vars(31) = wlav
 
-        if (isurf == 1) then
-          vars(25) = Qnetav
-          vars(26) = Hav
-          vars(27) = LEav
-          vars(28) = G0av
-          vars(29) = tendskinav
-          vars(30) = rsav
-          vars(31) = raav
-          vars(32) = cliqav
-          vars(33) = wlav
-          vars(34) = rssoilav
-          vars(35) = rsvegav
-        else if (isurf == 11) then
-          vars(25) = Qnetav
-          vars(26) = Hav
-          vars(27) = LEav
-          vars(28) = G0av
-          vars(29) = f1_av
-          vars(30) = f2b_av
-          vars(31) = wlav
-
-          if (lags) then
-            vars(32) = an_co2_av
-            vars(33) = resp_co2_av
-          end if
+        if (lags) then
+          vars(32) = an_co2_av
+          vars(33) = resp_co2_av
         end if
-
-        call writestat_nc(ncid,nvar,ncname,vars,nrec,.true.)
       end if
+
+      call writestat_nc(ncid,nvar,ncname,vars,nrec,.true.)
 
       if(lhetero) then
         do i=1,xpatches
@@ -1356,7 +1229,7 @@ contains
             endif
           enddo
         enddo
-      endif
+      end if
 
     end if
 
@@ -1628,11 +1501,11 @@ contains
 !> Clean up when leaving the run
   subroutine exittimestat
     use modmpi, only : myid
-    use modstat_nc, only : exitstat_nc,lnetcdf
+    use modstat_nc, only : exitstat_nc
     use modsurfdata,only :lhetero
     implicit none
 
-    if(ltimestat .and. lnetcdf .and. myid==0) call exitstat_nc(ncid)
+    if(ltimestat .and. myid==0) call exitstat_nc(ncid)
     if(.not.ltimestat) return
 
     !$acc exit data delete(blh_fld, sv0h, profile, gradient, dgrad)

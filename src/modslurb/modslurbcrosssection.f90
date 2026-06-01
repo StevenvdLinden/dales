@@ -276,7 +276,6 @@ contains
     use modfields,    only : rhof
     use modslurbdata, only : slurb_tile, facade_rah_doe, enable_slurb, output_slurb_bc, slurb_cross_output, &
                              slurb_cross_output_tendencies, slurb_cross_output_radiation
-    use modstat_nc,   only : lnetcdf
 
     implicit none
 
@@ -296,7 +295,7 @@ contains
     real(field_r), pointer :: tt_win_a(:,:,:), tt_win_b(:,:,:), &
                               t_win_a(:,:,:), t_win_b(:,:,:)
 
-    if (.not. (lnetcdf .and. enable_slurb .and. slurb_cross_output)) return
+    if (.not. (enable_slurb .and. slurb_cross_output)) return
 
     if (slurb_urb_enabled .and. is_sampling_timestep(slurb_urb_file_id)) then
       call slurb_urb_file%get_pointer('albedo_urb', albedo_urb)

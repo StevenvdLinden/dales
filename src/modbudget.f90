@@ -79,9 +79,9 @@ contains
 !> Initialization routine, reads namelists and inits variables
   subroutine initbudget
     use modmpi,    only : myid,mpierr, comm3d, D_MPI_BCAST
-    use modglobal, only : dtmax,k1,ifnamopt,fname_options, ifoutput,cexpnr,dtav_glob,timeav_glob,&
+    use modglobal, only : dtmax,k1,ifnamopt,fname_options,cexpnr,dtav_glob,timeav_glob,&
     ladaptive,dt_lim,btime,tres,lwarmstart,checknamelisterror
-    use modstat_nc, only : lnetcdf,define_nc,ncinfo,writestat_dims_nc
+    use modstat_nc, only : define_nc,ncinfo,writestat_dims_nc
     use fortran_support, only: nnml_output
     use modgenstat, only : idtav_prof=>idtav, itimeav_prof=>itimeav,ncid_prof=>ncid
 
@@ -143,47 +143,38 @@ contains
     ltkeb=.false. ; lsbtkeb=.false.
 
    !Preparing output files
-    if(myid==0 .and. .not. lwarmstart) then
-       open (ifoutput,file='budget.'//cexpnr,status='replace')
-       close (ifoutput)
-       open (ifoutput,file='sbbudget.'//cexpnr,status='replace')
-       close (ifoutput)
-    endif
-    if (lnetcdf) then
-      idtav = idtav_prof
-      itimeav = itimeav_prof
-      tnext      = idtav+btime
-      tnextwrite = itimeav+btime
-      nsamples = int(itimeav / idtav)
-      if (myid==0) then
-         ! 1) the subgrid budget quantities are for the e12 variable = sqrt(TKE)
-         !    (the subgrid TKE itself is a proper TKE, not the root).
-         ! 2) subgrid budget terms sbshr, sbbuo, sbdiss are currently only stored at the surface (for speed).
-         !
-         ! unit of TKE when weighted by rho: kg/m^3 * m^2/s^2 = kg/ms^2 = J/m^3
-         !
-        call ncinfo(ncname( 1,:),'tker','Resolved TKE','kg/ms^2','tt')
-        call ncinfo(ncname( 2,:),'shr','Resolved Shear','kg/ms^3','tt')
-        call ncinfo(ncname( 3,:),'buo','Resolved Buoyancy','kg/ms^3','tt')
-        call ncinfo(ncname( 4,:),'trsp','Resolved Transport','kg/ms^3','tt')
-        call ncinfo(ncname( 5,:),'ptrsp','Resolved Pressure transport (redistribution)','kg/ms^3','tt')
-        call ncinfo(ncname( 6,:),'diss','Resolved Dissipation','kg/ms^3','tt')
-        call ncinfo(ncname( 7,:),'budg','Resolved Storage = dE/dt','kg/ms^3','tt')
-        call ncinfo(ncname( 8,:),'stor','Resolved Budget = sum of contributions excl storage','kg/ms^3','tt')
-        call ncinfo(ncname( 9,:),'resid','Resolved Residual = budget - storage','kg/ms^3','tt')
-        call ncinfo(ncname(10,:),'sbtke','Subgrid TKE','kg/ms^2','tt')
-        call ncinfo(ncname(11,:),'sbshr','Subgrid Shear','kg/m^2s^2','tt')
-        call ncinfo(ncname(12,:),'sbbuo','Subgrid Buoyancy','kg/m^2s^2','tt')
-        call ncinfo(ncname(13,:),'sbdiss','Subgrid Dissipation','kg/m^2s^2','tt')
-        call ncinfo(ncname(14,:),'sbstor','Subgrid Storage','kg/m^2s^2','tt')
-        call ncinfo(ncname(15,:),'sbbudg','Subgrid Budget = sum of contributions excl storage','kg/m^2s^2','tt')
-        call ncinfo(ncname(16,:),'sbresid','Subgrid Residual = budget - storage','kg/m^2s^2','tt')
-        call ncinfo(ncname(17,:),'ekm','Turbulent exchange coefficient momentum','m^2/s','tt')
-        call ncinfo(ncname(18,:),'khkm','Kh / Km, in post-processing used to determine filter-grid ratio','-','tt')
-        call define_nc( ncid_prof, NVar, ncname)
-     end if
-
-   end if
+    idtav = idtav_prof
+    itimeav = itimeav_prof
+    tnext      = idtav+btime
+    tnextwrite = itimeav+btime
+    nsamples = int(itimeav / idtav)
+    if (myid==0) then
+        ! 1) the subgrid budget quantities are for the e12 variable = sqrt(TKE)
+        !    (the subgrid TKE itself is a proper TKE, not the root).
+        ! 2) subgrid budget terms sbshr, sbbuo, sbdiss are currently only stored at the surface (for speed).
+        !
+        ! unit of TKE when weighted by rho: kg/m^3 * m^2/s^2 = kg/ms^2 = J/m^3
+        !
+      call ncinfo(ncname( 1,:),'tker','Resolved TKE','kg/ms^2','tt')
+      call ncinfo(ncname( 2,:),'shr','Resolved Shear','kg/ms^3','tt')
+      call ncinfo(ncname( 3,:),'buo','Resolved Buoyancy','kg/ms^3','tt')
+      call ncinfo(ncname( 4,:),'trsp','Resolved Transport','kg/ms^3','tt')
+      call ncinfo(ncname( 5,:),'ptrsp','Resolved Pressure transport (redistribution)','kg/ms^3','tt')
+      call ncinfo(ncname( 6,:),'diss','Resolved Dissipation','kg/ms^3','tt')
+      call ncinfo(ncname( 7,:),'budg','Resolved Storage = dE/dt','kg/ms^3','tt')
+      call ncinfo(ncname( 8,:),'stor','Resolved Budget = sum of contributions excl storage','kg/ms^3','tt')
+      call ncinfo(ncname( 9,:),'resid','Resolved Residual = budget - storage','kg/ms^3','tt')
+      call ncinfo(ncname(10,:),'sbtke','Subgrid TKE','kg/ms^2','tt')
+      call ncinfo(ncname(11,:),'sbshr','Subgrid Shear','kg/m^2s^2','tt')
+      call ncinfo(ncname(12,:),'sbbuo','Subgrid Buoyancy','kg/m^2s^2','tt')
+      call ncinfo(ncname(13,:),'sbdiss','Subgrid Dissipation','kg/m^2s^2','tt')
+      call ncinfo(ncname(14,:),'sbstor','Subgrid Storage','kg/m^2s^2','tt')
+      call ncinfo(ncname(15,:),'sbbudg','Subgrid Budget = sum of contributions excl storage','kg/m^2s^2','tt')
+      call ncinfo(ncname(16,:),'sbresid','Subgrid Residual = budget - storage','kg/m^2s^2','tt')
+      call ncinfo(ncname(17,:),'ekm','Turbulent exchange coefficient momentum','m^2/s','tt')
+      call ncinfo(ncname(18,:),'khkm','Kh / Km, in post-processing used to determine filter-grid ratio','-','tt')
+      call define_nc( ncid_prof, NVar, ncname)
+    end if
 
   end subroutine initbudget
 
@@ -758,9 +749,9 @@ end subroutine do_genbudget
 
 !> Write the budgets to file
   subroutine writebudget
-    use modglobal, only : kmax,k1,zf,rtimee,cexpnr,ifoutput
+    use modglobal, only : kmax,k1,zf,rtimee,cexpnr
     use modmpi,    only : myid
-    use modstat_nc,only : writestat_nc,lnetcdf
+    use modstat_nc,only : writestat_nc
       use modgenstat, only: ncid_prof=>ncid,nrec_prof=>nrec
     implicit none
     real,dimension(k1,nvar) :: vars
@@ -794,100 +785,39 @@ end subroutine do_genbudget
 
 
     if(myid==0) then
-       open (ifoutput,file='budget.'//cexpnr,position='append')
+      vars(:, 1) =tkemn
+      vars(:, 2) =shrmn
+      vars(:, 3) =buomn
+      vars(:, 4) =trspmn
+      vars(:, 5) =ptrspmn
+      vars(:, 6) =dissmn
+      vars(:, 7) =budgmn
+      vars(:, 8) =stormn
+      vars(:, 9) =residmn
+      vars(:,10) =sbtkemn
+      vars(:,11) =sbshrmn
+      vars(:,12) =sbbuomn
+      vars(:,13) =sbdissmn
+      vars(:,14) =sbstormn
+      vars(:,15) =sbbudgmn
+      vars(:,16) =sbresidmn
+      vars(:,17) =ekmmn
+      vars(:,18) =khkmmn
+      call writestat_nc(ncid_prof,nvar,ncname,vars(1:kmax,:),nrec_prof,kmax)
+    end if !endif myid==0
 
-       write(ifoutput,'(//A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-           '#-------------------------------------------------------------------' &
-            ,'#',(timeav),'--- AVERAGING TIMESTEP --- ' &
-            ,nhrs,':',nminut,':',nsecs &
-            ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-       write (ifoutput,'(A/2A/2A)') &
-            '#-------------------------------------------------------------------', &
-            '#LEV HEIGHT  |   TKE        SHEAR      BUOYANCY     TRANSP',&
-            '     PRES_TRSP     DISS      BUDGET      STORAGE      RESID',&
-            '#     (m)    | (kg/ms^2)  ',&
-            '(-------------------------------- (kg/ms^3) -------------------------------------------------)'
+    !Reset time mean variables; resolved TKE
+    tkemn=0.;tkeb=0.;shrmn=0.;buomn=0.;trspmn=0.;ptrspmn=0.;
+    dissmn=0.;stormn=0.;budgmn=0.;residmn=0.
+    ltkeb=.false.
 
-       write(ifoutput,'(I3,F9.3,9E12.4)') &
-            (k, &
-            zf      (k), &
-            tkemn  (k), & !!!
-            shrmn   (k), &
-            buomn   (k), &
-            trspmn  (k), &
-            ptrspmn (k), &
-            dissmn  (k), &!!!
-            budgmn  (k), &!!!
-            stormn  (k), &
-            residmn (k), &!!!
-            k=1,kmax)
-       close(ifoutput)
-
-       open (ifoutput,file='sbbudget.'//cexpnr,position='append')
-
-       write(ifoutput,'(//A,/A,F5.0,A,I4,A,I2,A,I2,A)') &
-            '#---------------------------------------------------------------' &
-            ,'#',(timeav),'--- AVERAGING TIMESTEP --- ' &
-            ,nhrs,':',nminut,':',nsecs &
-            ,'   HRS:MIN:SEC AFTER INITIALIZATION '
-       write (ifoutput,'(A/2A/A)') &
-            '#---------------------------------------------------------------' &
-          ,'#LEV HEIGHT  |   SBTKE     SBSHEAR     BUOYANCY     SBDISS' &
-          ,'     SBSTORAGE    SBBUDGET   SBRESID    EKM          KH/KM '&
-          ,'#       (m)  | (kg/ms^2)  (--------------------------- (kg/m^2s^2) ----------------------------)   (m^2/s)'
-
-
-
-       write(ifoutput,'(I3,F9.3,9E12.4)') &
-            (k, &
-            zf      (k), &
-            sbtkemn  (k), &
-            sbshrmn   (k), &
-            sbbuomn   (k), &
-            sbdissmn  (k), &
-            sbstormn  (k), &
-            sbbudgmn  (k), &
-            sbresidmn (k), &
-            ekmmn     (k), & !!!
-            khkmmn    (k), &
-            k=1,kmax)
-       close(ifoutput)
-
-       if (lnetcdf) then
-          vars(:, 1) =tkemn
-          vars(:, 2) =shrmn
-          vars(:, 3) =buomn
-          vars(:, 4) =trspmn
-          vars(:, 5) =ptrspmn
-          vars(:, 6) =dissmn
-          vars(:, 7) =budgmn
-          vars(:, 8) =stormn
-          vars(:, 9) =residmn
-          vars(:,10) =sbtkemn
-          vars(:,11) =sbshrmn
-          vars(:,12) =sbbuomn
-          vars(:,13) =sbdissmn
-          vars(:,14) =sbstormn
-          vars(:,15) =sbbudgmn
-          vars(:,16) =sbresidmn
-          vars(:,17) =ekmmn
-          vars(:,18) =khkmmn
-          call writestat_nc(ncid_prof,nvar,ncname,vars(1:kmax,:),nrec_prof,kmax)
-       end if
-    endif !endif myid==0
-
-      !Reset time mean variables; resolved TKE
-      tkemn=0.;tkeb=0.;shrmn=0.;buomn=0.;trspmn=0.;ptrspmn=0.;
-      dissmn=0.;stormn=0.;budgmn=0.;residmn=0.
-      ltkeb=.false.
-      !Reset time mean variables; subgrid TKE
-      sbtkemn=0.;sbtkeb=0.;sbshrmn=0.;sbbuomn=0.;sbdissmn=0.;sbtkeb=0.
-      sbstormn=0.;sbbudgmn=0.;sbresidmn=0.;ekmmn=0.;khkmmn=0.;
-      lsbtkeb=.false.
+    !Reset time mean variables; subgrid TKE
+    sbtkemn=0.;sbtkeb=0.;sbshrmn=0.;sbbuomn=0.;sbdissmn=0.;sbtkeb=0.
+    sbstormn=0.;sbbudgmn=0.;sbresidmn=0.;ekmmn=0.;khkmmn=0.;
+    lsbtkeb=.false.
   end subroutine writebudget
 
-
-!> Cleans up after the run
+  !> Cleans up after the run
   subroutine exitbudget
   implicit none
 

@@ -66,7 +66,7 @@ subroutine initbulkmicrostat3
     use fortran_support, only: nnml_output
     use modglobal, only  : ifnamopt, fname_options, cexpnr, &
          dtav_glob, timeav_glob, ladaptive, dtmax,btime,tres,checknamelisterror,kmax
-    use modstat_nc, only : lnetcdf,open_nc,define_nc,ncinfo,nctiminfo,writestat_dims_nc
+    use modstat_nc, only : open_nc,define_nc,ncinfo,nctiminfo,writestat_dims_nc
     use modgenstat, only : idtav_prof=>idtav, itimeav_prof=>itimeav
     use modmicrodata3
 
@@ -106,20 +106,13 @@ subroutine initbulkmicrostat3
       call finish(routine, 'dtav must be an integer multiple of dtmax (NAMBULKMICROSTAT)')
     end if
 
-    ! TODO: text output
-    !if (myid == 0 .and. .not. lwarmstart) then
-    !  open (ifoutput,file = 'precep.'//cexpnr ,status = 'replace')
-    !  close(ifoutput)
-    !end if
-
-    if (lnetcdf) then
       idtav      = idtav_prof
       itimeav    = itimeav_prof
       tnext      = idtav   + btime
       tnextwrite = itimeav + btime
       nsamples = int(itimeav / idtav)
-      if (myid==0) then
 
+      if (myid==0) then
         ! statisitcs output
         if (l_statistics) then
           fname_mphys(15:17) = cexpnr
@@ -210,7 +203,7 @@ subroutine initbulkmicrostat3
             call writestat_dims_nc(ncid_mphys)
           end if
           call define_nc(ncid_mphys, nmvar, ncmname)
-        endif ! l_statistics
+        end if ! l_statistics
 
         ! tendencies output
         if (l_tendencies) then
@@ -317,7 +310,7 @@ subroutine initbulkmicrostat3
           ! -- finish
           if (cnt /= ntvar) then
             call finish(routine,  'wrong number of output tendencies')
-          endif
+          end if
 
           ! adding dimensions
           call open_nc(fname_tends,ncid_tends,nrec_tends,n3=kmax)
@@ -326,9 +319,8 @@ subroutine initbulkmicrostat3
             call writestat_dims_nc(ncid_tends)
           end if
           call define_nc(ncid_tends, ntvar, nctname)
-        endif ! l_tendencies
+        end if ! l_tendencies
       end if
-   end if
   end subroutine initbulkmicrostat3
 
 !------------------------------------------------------------------------------!
@@ -380,7 +372,7 @@ subroutine initbulkmicrostat3
   subroutine writebulkmicrostat3
     use modmpi,     only : myid, MPI_SUM, comm3d, mpierr, D_MPI_ALLREDUCE
     use modglobal,  only : rtimee, kmax, ijtot
-    use modstat_nc, only : lnetcdf, writestat_nc
+    use modstat_nc, only : writestat_nc
 !    use modgenstat, only : nrec_prof=>nrec
     use modmicrodata3
 
@@ -425,188 +417,182 @@ subroutine initbulkmicrostat3
 
     if (myid == 0) then
 
-      ! TODO: text output
+      if (l_statistics) then
+        call writestat_nc(ncid_mphys,1,tncmname,(/rtimee/),nrec_mphys,.true.)
+        cnt = 0
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + imphys_freeze:imphys_freeze,:),statistic_mphys(imphys_freeze:imphys_freeze,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + imphys_melt  :imphys_melt  ,:),statistic_mphys(imphys_melt  :imphys_melt  ,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + imphys_cond  :imphys_cond  ,:),statistic_mphys(imphys_cond  :imphys_cond  ,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + imphys_ev    :imphys_ev    ,:),statistic_mphys(imphys_ev    :imphys_ev    ,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + imphys_dep   :imphys_dep   ,:),statistic_mphys(imphys_dep   :imphys_dep   ,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + imphys_sub   :imphys_sub   ,:),statistic_mphys(imphys_sub   :imphys_sub   ,1:kmax),nrec_mphys,kmax)
+        cnt = cnt + 6
 
-      if (lnetcdf) then
-        ! TODO units and scaling factors for output
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hr :  cnt + in_hr,:),statistic_sv0_fsum(in_hr :  in_hr,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hr :  cnt + iq_hr,:),statistic_sv0_fsum(iq_hr :  iq_hr,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cl :  cnt + in_cl,:),statistic_sv0_fsum(in_cl :  in_cl,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_cl :  cnt + iq_cl,:),statistic_sv0_fsum(iq_cl :  iq_cl,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_ci :  cnt + in_ci,:),statistic_sv0_fsum(in_ci :  in_ci,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_ci :  cnt + iq_ci,:),statistic_sv0_fsum(iq_ci :  iq_ci,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hs :  cnt + in_hs,:),statistic_sv0_fsum(in_hs :  in_hs,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hs :  cnt + iq_hs,:),statistic_sv0_fsum(iq_hs :  iq_hs,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hg :  cnt + in_hg,:),statistic_sv0_fsum(in_hg :  in_hg,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hg :  cnt + iq_hg,:),statistic_sv0_fsum(iq_hg :  iq_hg,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cc :  cnt + in_cc,:),statistic_sv0_fsum(in_cc :  in_cc,1:kmax),nrec_mphys,kmax)
+        cnt = cnt + 11
 
-        if (l_statistics) then
-          call writestat_nc(ncid_mphys,1,tncmname,(/rtimee/),nrec_mphys,.true.)
-          cnt = 0
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + imphys_freeze:imphys_freeze,:),statistic_mphys(imphys_freeze:imphys_freeze,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + imphys_melt  :imphys_melt  ,:),statistic_mphys(imphys_melt  :imphys_melt  ,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + imphys_cond  :imphys_cond  ,:),statistic_mphys(imphys_cond  :imphys_cond  ,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + imphys_ev    :imphys_ev    ,:),statistic_mphys(imphys_ev    :imphys_ev    ,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + imphys_dep   :imphys_dep   ,:),statistic_mphys(imphys_dep   :imphys_dep   ,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + imphys_sub   :imphys_sub   ,:),statistic_mphys(imphys_sub   :imphys_sub   ,1:kmax),nrec_mphys,kmax)
-          cnt = cnt + 6
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hr : cnt + in_hr,:),statistic_svp_fsum(in_hr : in_hr,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hr : cnt + iq_hr,:),statistic_svp_fsum(iq_hr : iq_hr,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cl : cnt + in_cl,:),statistic_svp_fsum(in_cl : in_cl,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_cl : cnt + iq_cl,:),statistic_svp_fsum(iq_cl : iq_cl,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_ci : cnt + in_ci,:),statistic_svp_fsum(in_ci : in_ci,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_ci : cnt + iq_ci,:),statistic_svp_fsum(iq_ci : iq_ci,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hs : cnt + in_hs,:),statistic_svp_fsum(in_hs : in_hs,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hs : cnt + iq_hs,:),statistic_svp_fsum(iq_hs : iq_hs,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hg : cnt + in_hg,:),statistic_svp_fsum(in_hg : in_hg,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hg : cnt + iq_hg,:),statistic_svp_fsum(iq_hg : iq_hg,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cc : cnt + in_cc,:),statistic_svp_fsum(in_cc : in_cc,1:kmax),nrec_mphys,kmax)
+        cnt = cnt + 11
 
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hr :  cnt + in_hr,:),statistic_sv0_fsum(in_hr :  in_hr,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hr :  cnt + iq_hr,:),statistic_sv0_fsum(iq_hr :  iq_hr,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cl :  cnt + in_cl,:),statistic_sv0_fsum(in_cl :  in_cl,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_cl :  cnt + iq_cl,:),statistic_sv0_fsum(iq_cl :  iq_cl,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_ci :  cnt + in_ci,:),statistic_sv0_fsum(in_ci :  in_ci,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_ci :  cnt + iq_ci,:),statistic_sv0_fsum(iq_ci :  iq_ci,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hs :  cnt + in_hs,:),statistic_sv0_fsum(in_hs :  in_hs,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hs :  cnt + iq_hs,:),statistic_sv0_fsum(iq_hs :  iq_hs,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hg :  cnt + in_hg,:),statistic_sv0_fsum(in_hg :  in_hg,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hg :  cnt + iq_hg,:),statistic_sv0_fsum(iq_hg :  iq_hg,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cc :  cnt + in_cc,:),statistic_sv0_fsum(in_cc :  in_cc,1:kmax),nrec_mphys,kmax)
-          cnt = cnt + 11
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + 1 : cnt + 1,:),statistic_sv0_count(iq_hr : iq_hr,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + 2 : cnt + 2,:),statistic_sv0_count(iq_cl : iq_hr,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + 3 : cnt + 3,:),statistic_sv0_count(iq_ci : iq_hr,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + 4 : cnt + 4,:),statistic_sv0_count(iq_hs : iq_hr,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + 5 : cnt + 5,:),statistic_sv0_count(iq_hg : iq_hr,1:kmax),nrec_mphys,kmax)
+        cnt = cnt + 5
 
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hr : cnt + in_hr,:),statistic_svp_fsum(in_hr : in_hr,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hr : cnt + iq_hr,:),statistic_svp_fsum(iq_hr : iq_hr,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cl : cnt + in_cl,:),statistic_svp_fsum(in_cl : in_cl,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_cl : cnt + iq_cl,:),statistic_svp_fsum(iq_cl : iq_cl,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_ci : cnt + in_ci,:),statistic_svp_fsum(in_ci : in_ci,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_ci : cnt + iq_ci,:),statistic_svp_fsum(iq_ci : iq_ci,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hs : cnt + in_hs,:),statistic_svp_fsum(in_hs : in_hs,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hs : cnt + iq_hs,:),statistic_svp_fsum(iq_hs : iq_hs,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hg : cnt + in_hg,:),statistic_svp_fsum(in_hg : in_hg,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hg : cnt + iq_hg,:),statistic_svp_fsum(iq_hg : iq_hg,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cc : cnt + in_cc,:),statistic_svp_fsum(in_cc : in_cc,1:kmax),nrec_mphys,kmax)
-          cnt = cnt + 11
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hr : cnt + in_hr,:),statistic_sv0_csum(in_hr : in_hr,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hr : cnt + iq_hr,:),statistic_sv0_csum(iq_hr : iq_hr,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cl : cnt + in_cl,:),statistic_sv0_csum(in_cl : in_cl,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_cl : cnt + iq_cl,:),statistic_sv0_csum(iq_cl : iq_cl,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_ci : cnt + in_ci,:),statistic_sv0_csum(in_ci : in_ci,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_ci : cnt + iq_ci,:),statistic_sv0_csum(iq_ci : iq_ci,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hs : cnt + in_hs,:),statistic_sv0_csum(in_hs : in_hs,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hs : cnt + iq_hs,:),statistic_sv0_csum(iq_hs : iq_hs,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hg : cnt + in_hg,:),statistic_sv0_csum(in_hg : in_hg,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hg : cnt + iq_hg,:),statistic_sv0_csum(iq_hg : iq_hg,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cc : cnt + in_cc,:),statistic_sv0_csum(in_cc : in_cc,1:kmax),nrec_mphys,kmax)
+        cnt = cnt + 11
 
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + 1 : cnt + 1,:),statistic_sv0_count(iq_hr : iq_hr,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + 2 : cnt + 2,:),statistic_sv0_count(iq_cl : iq_hr,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + 3 : cnt + 3,:),statistic_sv0_count(iq_ci : iq_hr,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + 4 : cnt + 4,:),statistic_sv0_count(iq_hs : iq_hr,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + 5 : cnt + 5,:),statistic_sv0_count(iq_hg : iq_hr,1:kmax),nrec_mphys,kmax)
-          cnt = cnt + 5
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hr : cnt + in_hr,:),statistic_svp_csum(in_hr : in_hr,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hr : cnt + iq_hr,:),statistic_svp_csum(iq_hr : iq_hr,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cl : cnt + in_cl,:),statistic_svp_csum(in_cl : in_cl,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_cl : cnt + iq_cl,:),statistic_svp_csum(iq_cl : iq_cl,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_ci : cnt + in_ci,:),statistic_svp_csum(in_ci : in_ci,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_ci : cnt + iq_ci,:),statistic_svp_csum(iq_ci : iq_ci,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hs : cnt + in_hs,:),statistic_svp_csum(in_hs : in_hs,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hs : cnt + iq_hs,:),statistic_svp_csum(iq_hs : iq_hs,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hg : cnt + in_hg,:),statistic_svp_csum(in_hg : in_hg,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hg : cnt + iq_hg,:),statistic_svp_csum(iq_hg : iq_hg,1:kmax),nrec_mphys,kmax)
+        call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cc : cnt + in_cc,:),statistic_svp_csum(in_cc : in_cc,1:kmax),nrec_mphys,kmax)
+        cnt = cnt + 11
 
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hr : cnt + in_hr,:),statistic_sv0_csum(in_hr : in_hr,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hr : cnt + iq_hr,:),statistic_sv0_csum(iq_hr : iq_hr,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cl : cnt + in_cl,:),statistic_sv0_csum(in_cl : in_cl,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_cl : cnt + iq_cl,:),statistic_sv0_csum(iq_cl : iq_cl,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_ci : cnt + in_ci,:),statistic_sv0_csum(in_ci : in_ci,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_ci : cnt + iq_ci,:),statistic_sv0_csum(iq_ci : iq_ci,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hs : cnt + in_hs,:),statistic_sv0_csum(in_hs : in_hs,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hs : cnt + iq_hs,:),statistic_sv0_csum(iq_hs : iq_hs,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hg : cnt + in_hg,:),statistic_sv0_csum(in_hg : in_hg,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hg : cnt + iq_hg,:),statistic_sv0_csum(iq_hg : iq_hg,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cc : cnt + in_cc,:),statistic_sv0_csum(in_cc : in_cc,1:kmax),nrec_mphys,kmax)
-          cnt = cnt + 11
-
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hr : cnt + in_hr,:),statistic_svp_csum(in_hr : in_hr,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hr : cnt + iq_hr,:),statistic_svp_csum(iq_hr : iq_hr,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cl : cnt + in_cl,:),statistic_svp_csum(in_cl : in_cl,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_cl : cnt + iq_cl,:),statistic_svp_csum(iq_cl : iq_cl,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_ci : cnt + in_ci,:),statistic_svp_csum(in_ci : in_ci,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_ci : cnt + iq_ci,:),statistic_svp_csum(iq_ci : iq_ci,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hs : cnt + in_hs,:),statistic_svp_csum(in_hs : in_hs,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hs : cnt + iq_hs,:),statistic_svp_csum(iq_hs : iq_hs,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_hg : cnt + in_hg,:),statistic_svp_csum(in_hg : in_hg,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + iq_hg : cnt + iq_hg,:),statistic_svp_csum(iq_hg : iq_hg,1:kmax),nrec_mphys,kmax)
-          call writestat_nc(ncid_mphys,1,ncmname(cnt + in_cc : cnt + in_cc,:),statistic_svp_csum(in_cc : in_cc,1:kmax),nrec_mphys,kmax)
-          cnt = cnt + 11
-
-          if (cnt /= nmvar) then
-            call finish(routine, 'wrong number of output variables')
-          endif
+        if (cnt /= nmvar) then
+          call finish(routine, 'wrong number of output variables')
         endif
+      endif
 
-        if (l_tendencies) then
-           call writestat_nc(ncid_tends,1,nctname,(/rtimee/),nrec_tends,.true.)
-          cnt = 0
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_nu     :cnt + idn_cl_nu     ,:),tend_fsum(idn_cl_nu     :idn_cl_nu     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_inu    :cnt + idn_ci_inu    ,:),tend_fsum(idn_ci_inu    :idn_ci_inu    ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_au     :cnt + idn_cl_au     ,:),tend_fsum(idn_cl_au     :idn_cl_au     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_au     :cnt + idq_hr_au     ,:),tend_fsum(idq_hr_au     :idq_hr_au     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_au     :cnt + idn_hr_au     ,:),tend_fsum(idn_hr_au     :idn_hr_au     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_ac     :cnt + idq_hr_ac     ,:),tend_fsum(idq_hr_ac     :idq_hr_ac     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_ac     :cnt + idn_cl_ac     ,:),tend_fsum(idn_cl_ac     :idn_cl_ac     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_br     :cnt + idn_hr_br     ,:),tend_fsum(idn_hr_br     :idn_hr_br     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_sc     :cnt + idn_hr_sc     ,:),tend_fsum(idn_hr_sc     :idn_hr_sc     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_ev     :cnt + idq_hr_ev     ,:),tend_fsum(idq_hr_ev     :idq_hr_ev     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_ev     :cnt + idn_hr_ev     ,:),tend_fsum(idn_hr_ev     :idn_hr_ev     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_dep    :cnt + idq_ci_dep    ,:),tend_fsum(idq_ci_dep    :idq_ci_dep    ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_dep    :cnt + idq_hs_dep    ,:),tend_fsum(idq_hs_dep    :idq_hs_dep    ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_dep    :cnt + idq_hg_dep    ,:),tend_fsum(idq_hg_dep    :idq_hg_dep    ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_rime   :cnt + idq_ci_rime   ,:),tend_fsum(idq_ci_rime   :idq_ci_rime   ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_rime_ci:cnt + idn_cl_rime_ci,:),tend_fsum(idn_cl_rime_ci:idn_cl_rime_ci,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_rime   :cnt + idq_hs_rime   ,:),tend_fsum(idq_hs_rime   :idq_hs_rime   ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_rime_hs:cnt + idn_cl_rime_hs,:),tend_fsum(idn_cl_rime_hs:idn_cl_rime_hs,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_rime   :cnt + idq_hg_rime   ,:),tend_fsum(idq_hg_rime   :idq_hg_rime   ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_rime_hg:cnt + idn_cl_rime_hg,:),tend_fsum(idn_cl_rime_hg:idn_cl_rime_hg,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hshr_rime :cnt + idq_hshr_rime ,:),tend_fsum(idq_hshr_rime :idq_hshr_rime ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_rime_hs:cnt + idn_hr_rime_hs,:),tend_fsum(idn_hr_rime_hs:idn_hr_rime_hs,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hghr_rime :cnt + idq_hghr_rime ,:),tend_fsum(idq_hghr_rime :idq_hghr_rime ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_rime_hg:cnt + idn_hr_rime_hg,:),tend_fsum(idn_hr_rime_hg:idn_hr_rime_hg,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_rime_ri:cnt + idq_hr_rime_ri,:),tend_fsum(idq_hr_rime_ri:idq_hr_rime_ri,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_rime_ri:cnt + idq_ci_rime_ri,:),tend_fsum(idq_ci_rime_ri:idq_ci_rime_ri,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_rime_ri:cnt + idn_ci_rime_ri,:),tend_fsum(idn_ci_rime_ri:idn_ci_rime_ri,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_rime_ri:cnt + idn_hr_rime_ri,:),tend_fsum(idn_hr_rime_ri:idn_hr_rime_ri,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_col_rs :cnt + idq_hr_col_rs ,:),tend_fsum(idq_hr_col_rs :idq_hr_col_rs ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_col_rs :cnt + idq_hs_col_rs ,:),tend_fsum(idq_hs_col_rs :idq_hs_col_rs ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_col_rs :cnt + idn_hr_col_rs ,:),tend_fsum(idn_hr_col_rs :idn_hr_col_rs ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_col_rs :cnt + idn_hs_col_rs ,:),tend_fsum(idn_hs_col_rs :idn_hs_col_rs ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_col_ri :cnt + idq_hr_col_ri ,:),tend_fsum(idq_hr_col_ri :idq_hr_col_ri ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_col_ri :cnt + idq_ci_col_ri ,:),tend_fsum(idq_ci_col_ri :idq_ci_col_ri ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_col_ri :cnt + idn_ci_col_ri ,:),tend_fsum(idn_ci_col_ri :idn_ci_col_ri ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_col_ri :cnt + idn_hr_col_ri ,:),tend_fsum(idn_hr_col_ri :idn_hr_col_ri ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_cl_het    :cnt + idq_cl_het    ,:),tend_fsum(idq_cl_het    :idq_cl_het    ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_het    :cnt + idn_cl_het    ,:),tend_fsum(idn_cl_het    :idn_cl_het    ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_het    :cnt + idq_hr_het    ,:),tend_fsum(idq_hr_het    :idq_hr_het    ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_het    :cnt + idn_hr_het    ,:),tend_fsum(idn_hr_het    :idn_hr_het    ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_cl_hom    :cnt + idq_cl_hom    ,:),tend_fsum(idq_cl_hom    :idq_cl_hom    ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_hom    :cnt + idn_cl_hom    ,:),tend_fsum(idn_cl_hom    :idn_cl_hom    ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_col_iis:cnt + idq_ci_col_iis,:),tend_fsum(idq_ci_col_iis:idq_ci_col_iis,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_col_iis:cnt + idn_ci_col_iis,:),tend_fsum(idn_ci_col_iis:idn_ci_col_iis,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_col_sss:cnt + idn_hs_col_sss,:),tend_fsum(idn_hs_col_sss:idn_hs_col_sss,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hsci_col  :cnt + idq_hsci_col  ,:),tend_fsum(idq_hsci_col  :idq_hsci_col  ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_col_hs :cnt + idn_ci_col_hs ,:),tend_fsum(idn_ci_col_hs :idn_ci_col_hs ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hghs_col  :cnt + idq_hghs_col  ,:),tend_fsum(idq_hghs_col  :idq_hghs_col  ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_col_hg :cnt + idn_hs_col_hg ,:),tend_fsum(idn_hs_col_hg :idn_hs_col_hg ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_cv     :cnt + idq_ci_cv     ,:),tend_fsum(idq_ci_cv     :idq_ci_cv     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_cv     :cnt + idn_ci_cv     ,:),tend_fsum(idn_ci_cv     :idn_ci_cv     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_cv     :cnt + idq_hs_cv     ,:),tend_fsum(idq_hs_cv     :idq_hs_cv     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_cv     :cnt + idn_hs_cv     ,:),tend_fsum(idn_hs_cv     :idn_hs_cv     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_sc     :cnt + idn_cl_sc     ,:),tend_fsum(idn_cl_sc     :idn_cl_sc     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_mul    :cnt + idn_ci_mul    ,:),tend_fsum(idn_ci_mul    :idn_ci_mul    ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_mul    :cnt + idq_ci_mul    ,:),tend_fsum(idq_ci_mul    :idq_ci_mul    ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_me     :cnt + idn_ci_me     ,:),tend_fsum(idn_ci_me     :idn_ci_me     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_me     :cnt + idq_ci_me     ,:),tend_fsum(idq_ci_me     :idq_ci_me     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_me     :cnt + idn_hs_me     ,:),tend_fsum(idn_hs_me     :idn_hs_me     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_me     :cnt + idq_hs_me     ,:),tend_fsum(idq_hs_me     :idq_hs_me     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hg_me     :cnt + idn_hg_me     ,:),tend_fsum(idn_hg_me     :idn_hg_me     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_me     :cnt + idq_hg_me     ,:),tend_fsum(idq_hg_me     :idq_hg_me     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_ev     :cnt + idn_ci_ev     ,:),tend_fsum(idn_ci_ev     :idn_ci_ev     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_ev     :cnt + idq_ci_ev     ,:),tend_fsum(idq_ci_ev     :idq_ci_ev     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_ev     :cnt + idn_hs_ev     ,:),tend_fsum(idn_hs_ev     :idn_hs_ev     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_ev     :cnt + idq_hs_ev     ,:),tend_fsum(idq_hs_ev     :idq_hs_ev     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hg_ev     :cnt + idn_hg_ev     ,:),tend_fsum(idn_hg_ev     :idn_hg_ev     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_ev     :cnt + idq_hg_ev     ,:),tend_fsum(idq_hg_ev     :idq_hg_ev     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_eme_ic :cnt + idn_ci_eme_ic ,:),tend_fsum(idn_ci_eme_ic :idn_ci_eme_ic ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_eme_ic :cnt + idq_ci_eme_ic ,:),tend_fsum(idq_ci_eme_ic :idq_ci_eme_ic ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_eme_ri :cnt + idn_ci_eme_ri ,:),tend_fsum(idn_ci_eme_ri :idn_ci_eme_ri ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_eme_ri :cnt + idq_ci_eme_ri ,:),tend_fsum(idq_ci_eme_ri :idq_ci_eme_ri ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_eme_sc :cnt + idn_hs_eme_sc ,:),tend_fsum(idn_hs_eme_sc :idn_hs_eme_sc ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_eme_sc :cnt + idq_hs_eme_sc ,:),tend_fsum(idq_hs_eme_sc :idq_hs_eme_sc ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_eme_rs :cnt + idn_hs_eme_rs ,:),tend_fsum(idn_hs_eme_rs :idn_hs_eme_rs ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_eme_rs :cnt + idq_hs_eme_rs ,:),tend_fsum(idq_hs_eme_rs :idq_hs_eme_rs ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hg_eme_gc :cnt + idn_hg_eme_gc ,:),tend_fsum(idn_hg_eme_gc :idn_hg_eme_gc ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_eme_gc :cnt + idq_hg_eme_gc ,:),tend_fsum(idq_hg_eme_gc :idq_hg_eme_gc ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hg_eme_gr :cnt + idn_hg_eme_gr ,:),tend_fsum(idn_hg_eme_gr :idn_hg_eme_gr ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_eme_gr :cnt + idq_hg_eme_gr ,:),tend_fsum(idq_hg_eme_gr :idq_hg_eme_gr ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_se     :cnt + idn_cl_se     ,:),tend_fsum(idn_cl_se     :idn_cl_se     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_cl_se     :cnt + idq_cl_se     ,:),tend_fsum(idq_cl_se     :idq_cl_se     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_se     :cnt + idn_ci_se     ,:),tend_fsum(idn_ci_se     :idn_ci_se     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_se     :cnt + idq_ci_se     ,:),tend_fsum(idq_ci_se     :idq_ci_se     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_se     :cnt + idn_hr_se     ,:),tend_fsum(idn_hr_se     :idn_hr_se     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_se     :cnt + idq_hr_se     ,:),tend_fsum(idq_hr_se     :idq_hr_se     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_se     :cnt + idn_hs_se     ,:),tend_fsum(idn_hs_se     :idn_hs_se     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_se     :cnt + idq_hs_se     ,:),tend_fsum(idq_hs_se     :idq_hs_se     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_hg_se     :cnt + idn_hg_se     ,:),tend_fsum(idn_hg_se     :idn_hg_se     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_se     :cnt + idq_hg_se     ,:),tend_fsum(idq_hg_se     :idq_hg_se     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idq_cl_sa     :cnt + idq_cl_sa     ,:),tend_fsum(idq_cl_sa     :idq_cl_sa     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_sa     :cnt + idn_cl_sa     ,:),tend_fsum(idn_cl_sa     :idn_cl_sa     ,1:kmax),nrec_tends,kmax)
-          call writestat_nc(ncid_tends,1,nctname(cnt + iret_cc       :cnt + iret_cc       ,:),tend_fsum(iret_cc       :iret_cc       ,1:kmax),nrec_tends,kmax)
-          cnt = cnt + 93
+      if (l_tendencies) then
+          call writestat_nc(ncid_tends,1,nctname,(/rtimee/),nrec_tends,.true.)
+        cnt = 0
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_nu     :cnt + idn_cl_nu     ,:),tend_fsum(idn_cl_nu     :idn_cl_nu     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_inu    :cnt + idn_ci_inu    ,:),tend_fsum(idn_ci_inu    :idn_ci_inu    ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_au     :cnt + idn_cl_au     ,:),tend_fsum(idn_cl_au     :idn_cl_au     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_au     :cnt + idq_hr_au     ,:),tend_fsum(idq_hr_au     :idq_hr_au     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_au     :cnt + idn_hr_au     ,:),tend_fsum(idn_hr_au     :idn_hr_au     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_ac     :cnt + idq_hr_ac     ,:),tend_fsum(idq_hr_ac     :idq_hr_ac     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_ac     :cnt + idn_cl_ac     ,:),tend_fsum(idn_cl_ac     :idn_cl_ac     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_br     :cnt + idn_hr_br     ,:),tend_fsum(idn_hr_br     :idn_hr_br     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_sc     :cnt + idn_hr_sc     ,:),tend_fsum(idn_hr_sc     :idn_hr_sc     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_ev     :cnt + idq_hr_ev     ,:),tend_fsum(idq_hr_ev     :idq_hr_ev     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_ev     :cnt + idn_hr_ev     ,:),tend_fsum(idn_hr_ev     :idn_hr_ev     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_dep    :cnt + idq_ci_dep    ,:),tend_fsum(idq_ci_dep    :idq_ci_dep    ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_dep    :cnt + idq_hs_dep    ,:),tend_fsum(idq_hs_dep    :idq_hs_dep    ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_dep    :cnt + idq_hg_dep    ,:),tend_fsum(idq_hg_dep    :idq_hg_dep    ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_rime   :cnt + idq_ci_rime   ,:),tend_fsum(idq_ci_rime   :idq_ci_rime   ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_rime_ci:cnt + idn_cl_rime_ci,:),tend_fsum(idn_cl_rime_ci:idn_cl_rime_ci,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_rime   :cnt + idq_hs_rime   ,:),tend_fsum(idq_hs_rime   :idq_hs_rime   ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_rime_hs:cnt + idn_cl_rime_hs,:),tend_fsum(idn_cl_rime_hs:idn_cl_rime_hs,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_rime   :cnt + idq_hg_rime   ,:),tend_fsum(idq_hg_rime   :idq_hg_rime   ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_rime_hg:cnt + idn_cl_rime_hg,:),tend_fsum(idn_cl_rime_hg:idn_cl_rime_hg,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hshr_rime :cnt + idq_hshr_rime ,:),tend_fsum(idq_hshr_rime :idq_hshr_rime ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_rime_hs:cnt + idn_hr_rime_hs,:),tend_fsum(idn_hr_rime_hs:idn_hr_rime_hs,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hghr_rime :cnt + idq_hghr_rime ,:),tend_fsum(idq_hghr_rime :idq_hghr_rime ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_rime_hg:cnt + idn_hr_rime_hg,:),tend_fsum(idn_hr_rime_hg:idn_hr_rime_hg,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_rime_ri:cnt + idq_hr_rime_ri,:),tend_fsum(idq_hr_rime_ri:idq_hr_rime_ri,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_rime_ri:cnt + idq_ci_rime_ri,:),tend_fsum(idq_ci_rime_ri:idq_ci_rime_ri,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_rime_ri:cnt + idn_ci_rime_ri,:),tend_fsum(idn_ci_rime_ri:idn_ci_rime_ri,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_rime_ri:cnt + idn_hr_rime_ri,:),tend_fsum(idn_hr_rime_ri:idn_hr_rime_ri,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_col_rs :cnt + idq_hr_col_rs ,:),tend_fsum(idq_hr_col_rs :idq_hr_col_rs ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_col_rs :cnt + idq_hs_col_rs ,:),tend_fsum(idq_hs_col_rs :idq_hs_col_rs ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_col_rs :cnt + idn_hr_col_rs ,:),tend_fsum(idn_hr_col_rs :idn_hr_col_rs ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_col_rs :cnt + idn_hs_col_rs ,:),tend_fsum(idn_hs_col_rs :idn_hs_col_rs ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_col_ri :cnt + idq_hr_col_ri ,:),tend_fsum(idq_hr_col_ri :idq_hr_col_ri ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_col_ri :cnt + idq_ci_col_ri ,:),tend_fsum(idq_ci_col_ri :idq_ci_col_ri ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_col_ri :cnt + idn_ci_col_ri ,:),tend_fsum(idn_ci_col_ri :idn_ci_col_ri ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_col_ri :cnt + idn_hr_col_ri ,:),tend_fsum(idn_hr_col_ri :idn_hr_col_ri ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_cl_het    :cnt + idq_cl_het    ,:),tend_fsum(idq_cl_het    :idq_cl_het    ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_het    :cnt + idn_cl_het    ,:),tend_fsum(idn_cl_het    :idn_cl_het    ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_het    :cnt + idq_hr_het    ,:),tend_fsum(idq_hr_het    :idq_hr_het    ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_het    :cnt + idn_hr_het    ,:),tend_fsum(idn_hr_het    :idn_hr_het    ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_cl_hom    :cnt + idq_cl_hom    ,:),tend_fsum(idq_cl_hom    :idq_cl_hom    ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_hom    :cnt + idn_cl_hom    ,:),tend_fsum(idn_cl_hom    :idn_cl_hom    ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_col_iis:cnt + idq_ci_col_iis,:),tend_fsum(idq_ci_col_iis:idq_ci_col_iis,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_col_iis:cnt + idn_ci_col_iis,:),tend_fsum(idn_ci_col_iis:idn_ci_col_iis,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_col_sss:cnt + idn_hs_col_sss,:),tend_fsum(idn_hs_col_sss:idn_hs_col_sss,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hsci_col  :cnt + idq_hsci_col  ,:),tend_fsum(idq_hsci_col  :idq_hsci_col  ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_col_hs :cnt + idn_ci_col_hs ,:),tend_fsum(idn_ci_col_hs :idn_ci_col_hs ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hghs_col  :cnt + idq_hghs_col  ,:),tend_fsum(idq_hghs_col  :idq_hghs_col  ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_col_hg :cnt + idn_hs_col_hg ,:),tend_fsum(idn_hs_col_hg :idn_hs_col_hg ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_cv     :cnt + idq_ci_cv     ,:),tend_fsum(idq_ci_cv     :idq_ci_cv     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_cv     :cnt + idn_ci_cv     ,:),tend_fsum(idn_ci_cv     :idn_ci_cv     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_cv     :cnt + idq_hs_cv     ,:),tend_fsum(idq_hs_cv     :idq_hs_cv     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_cv     :cnt + idn_hs_cv     ,:),tend_fsum(idn_hs_cv     :idn_hs_cv     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_sc     :cnt + idn_cl_sc     ,:),tend_fsum(idn_cl_sc     :idn_cl_sc     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_mul    :cnt + idn_ci_mul    ,:),tend_fsum(idn_ci_mul    :idn_ci_mul    ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_mul    :cnt + idq_ci_mul    ,:),tend_fsum(idq_ci_mul    :idq_ci_mul    ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_me     :cnt + idn_ci_me     ,:),tend_fsum(idn_ci_me     :idn_ci_me     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_me     :cnt + idq_ci_me     ,:),tend_fsum(idq_ci_me     :idq_ci_me     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_me     :cnt + idn_hs_me     ,:),tend_fsum(idn_hs_me     :idn_hs_me     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_me     :cnt + idq_hs_me     ,:),tend_fsum(idq_hs_me     :idq_hs_me     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hg_me     :cnt + idn_hg_me     ,:),tend_fsum(idn_hg_me     :idn_hg_me     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_me     :cnt + idq_hg_me     ,:),tend_fsum(idq_hg_me     :idq_hg_me     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_ev     :cnt + idn_ci_ev     ,:),tend_fsum(idn_ci_ev     :idn_ci_ev     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_ev     :cnt + idq_ci_ev     ,:),tend_fsum(idq_ci_ev     :idq_ci_ev     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_ev     :cnt + idn_hs_ev     ,:),tend_fsum(idn_hs_ev     :idn_hs_ev     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_ev     :cnt + idq_hs_ev     ,:),tend_fsum(idq_hs_ev     :idq_hs_ev     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hg_ev     :cnt + idn_hg_ev     ,:),tend_fsum(idn_hg_ev     :idn_hg_ev     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_ev     :cnt + idq_hg_ev     ,:),tend_fsum(idq_hg_ev     :idq_hg_ev     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_eme_ic :cnt + idn_ci_eme_ic ,:),tend_fsum(idn_ci_eme_ic :idn_ci_eme_ic ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_eme_ic :cnt + idq_ci_eme_ic ,:),tend_fsum(idq_ci_eme_ic :idq_ci_eme_ic ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_eme_ri :cnt + idn_ci_eme_ri ,:),tend_fsum(idn_ci_eme_ri :idn_ci_eme_ri ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_eme_ri :cnt + idq_ci_eme_ri ,:),tend_fsum(idq_ci_eme_ri :idq_ci_eme_ri ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_eme_sc :cnt + idn_hs_eme_sc ,:),tend_fsum(idn_hs_eme_sc :idn_hs_eme_sc ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_eme_sc :cnt + idq_hs_eme_sc ,:),tend_fsum(idq_hs_eme_sc :idq_hs_eme_sc ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_eme_rs :cnt + idn_hs_eme_rs ,:),tend_fsum(idn_hs_eme_rs :idn_hs_eme_rs ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_eme_rs :cnt + idq_hs_eme_rs ,:),tend_fsum(idq_hs_eme_rs :idq_hs_eme_rs ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hg_eme_gc :cnt + idn_hg_eme_gc ,:),tend_fsum(idn_hg_eme_gc :idn_hg_eme_gc ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_eme_gc :cnt + idq_hg_eme_gc ,:),tend_fsum(idq_hg_eme_gc :idq_hg_eme_gc ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hg_eme_gr :cnt + idn_hg_eme_gr ,:),tend_fsum(idn_hg_eme_gr :idn_hg_eme_gr ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_eme_gr :cnt + idq_hg_eme_gr ,:),tend_fsum(idq_hg_eme_gr :idq_hg_eme_gr ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_se     :cnt + idn_cl_se     ,:),tend_fsum(idn_cl_se     :idn_cl_se     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_cl_se     :cnt + idq_cl_se     ,:),tend_fsum(idq_cl_se     :idq_cl_se     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_ci_se     :cnt + idn_ci_se     ,:),tend_fsum(idn_ci_se     :idn_ci_se     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_ci_se     :cnt + idq_ci_se     ,:),tend_fsum(idq_ci_se     :idq_ci_se     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hr_se     :cnt + idn_hr_se     ,:),tend_fsum(idn_hr_se     :idn_hr_se     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hr_se     :cnt + idq_hr_se     ,:),tend_fsum(idq_hr_se     :idq_hr_se     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hs_se     :cnt + idn_hs_se     ,:),tend_fsum(idn_hs_se     :idn_hs_se     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hs_se     :cnt + idq_hs_se     ,:),tend_fsum(idq_hs_se     :idq_hs_se     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_hg_se     :cnt + idn_hg_se     ,:),tend_fsum(idn_hg_se     :idn_hg_se     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_hg_se     :cnt + idq_hg_se     ,:),tend_fsum(idq_hg_se     :idq_hg_se     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idq_cl_sa     :cnt + idq_cl_sa     ,:),tend_fsum(idq_cl_sa     :idq_cl_sa     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + idn_cl_sa     :cnt + idn_cl_sa     ,:),tend_fsum(idn_cl_sa     :idn_cl_sa     ,1:kmax),nrec_tends,kmax)
+        call writestat_nc(ncid_tends,1,nctname(cnt + iret_cc       :cnt + iret_cc       ,:),tend_fsum(iret_cc       :iret_cc       ,1:kmax),nrec_tends,kmax)
+        cnt = cnt + 93
 
-          if (cnt /= ntvar) then
-            call finish(routine, 'wrong number of tendencies')
-          endif
-        endif
+        if (cnt /= ntvar) then
+          call finish(routine, 'wrong number of tendencies')
+        end if
       end if
     end if
 

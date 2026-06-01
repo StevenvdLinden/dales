@@ -56,9 +56,8 @@ contains
     use modmpi, only : myid, comm3d, &
         mpierr, D_MPI_BCAST
     use modglobal, only : dtav_glob, ifnamopt, fname_options, &
-        checknamelisterror, tres, btime, dt_lim, ladaptive, &
-      dtmax
-    use modstat_nc, only : lnetcdf
+                          checknamelisterror, tres, btime, dt_lim, ladaptive, &
+                          dtmax
     use moddrydeposition, only : ndeptracers
     use fortran_support,  only : nnml_output
 
@@ -98,17 +97,15 @@ contains
       call finish(routine, 'depcrosssection: dtav should be a integer multiple of dtmax')
     end if
 
-    if (lnetcdf) then
-      dep_file = cross_section_file_t('depcross', nx=itot, ny=jtot, lgpu=.false.)
-      do isv = 1, nsv
-        if (.not. tracer_prop(isv)%ldep) cycle
-        write (varname, '(a,a)') 'drydep_', trim(tracer_prop(isv)%tracname)
-        write (varlongname, '(a,a)')  'Dry deposition flux of ', trim(tracer_prop(isv)%tracname)
-        call dep_file%add_var(varname, varlongname, 'kg / (m2 * s)', 'tt0t')
-      end do
-      call add_output_file(dep_file, dtav, dep_file_id)
-      dep_file_enabled = .true.
-    end if
+    dep_file = cross_section_file_t('depcross', nx=itot, ny=jtot, lgpu=.false.)
+    do isv = 1, nsv
+      if (.not. tracer_prop(isv)%ldep) cycle
+      write (varname, '(a,a)') 'drydep_', trim(tracer_prop(isv)%tracname)
+      write (varlongname, '(a,a)')  'Dry deposition flux of ', trim(tracer_prop(isv)%tracname)
+      call dep_file%add_var(varname, varlongname, 'kg / (m2 * s)', 'tt0t')
+    end do
+    call add_output_file(dep_file, dtav, dep_file_id)
+    dep_file_enabled = .true.
   end subroutine initdepcrosssection
 
   !> Do crosssection. Collect data to truncated (2 byte) integers, and write them to file
@@ -133,7 +130,6 @@ contains
     use moddrydeposition, only : depfield
     use modglobal, only : i1, j1, nsv
     use modfields, only : rhof
-    use modstat_nc, only : lnetcdf
     use modtracers, only : tracer_prop
     implicit none
 
@@ -142,7 +138,7 @@ contains
     real    :: MW_air = 28.9644
     character(80) :: varname
 
-    if (.not. (lnetcdf .and. dep_file_enabled)) return
+    if (.not. (dep_file_enabled)) return
 
     ! Store the flux as a positive number
     ! dep_ptr(1:imax, 1:jmax, 1:ndeptracers) = -depfield(2:i1, 2:j1, 1:ndeptracers) &

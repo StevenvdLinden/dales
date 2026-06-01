@@ -40,7 +40,7 @@ contains
   subroutine initmsebudg
     use modmpi,   only :myid,comm3d,myidx,myidy,d_mpi_bcast
     use modglobal,only :i1,ih,j1,jh,k1,imax,jmax,cexpnr,ifnamopt,fname_options,dtmax,dtav_glob,ladaptive,dt_lim,btime,tres
-    use modstat_nc,only : lnetcdf,open_nc, define_nc,ncinfo,writestat_dims_nc
+    use modstat_nc,only : open_nc, define_nc,ncinfo,writestat_dims_nc
     use fortran_support, only: nnml_output
     implicit none
 
@@ -48,7 +48,7 @@ contains
 
     integer :: ierr
 
-     namelist/NAMMSEBUDG/ &
+    namelist/NAMMSEBUDG/ &
     dtav,lmsebudg
 
     dtav=dtav_glob
@@ -80,21 +80,21 @@ contains
     allocate(mse0(2-ih:i1+ih,2-jh:j1+jh,k1))
     allocate(msem(2-ih:i1+ih,2-jh:j1+jh,k1))
 
-         write(fname,'(A,i3.3,A,i3.3,A)') 'mse_budget.', myidx, '.', myidy, '.xxx.nc'    !rce table 6 2D hourly averaged variables
-      fname(20:22) = cexpnr
-      call ncinfo(tmsencname(1,:),'time','Time','s','time')
-      call ncinfo(ncmsename( 1,:),'fmse'     ,'mass-weighted vertical integral of frozen moist static energy','J/m2','tt0t')
-      call ncinfo(ncmsename( 2,:),'hadvmse'  ,'mass-weighted vertical integral of horizontal advective tendency of frozen moist static energy','J/m2/s','tt0t')
-      call ncinfo(ncmsename( 3,:),'vadvmse'  ,'mass-weighted vertical integral of vertical advective tendency of frozen moist static energy','J/m2/s','tt0t')
-      call ncinfo(ncmsename( 4,:),'tnfmse'   ,'total tendency of mass-weighted vertical integral of frozen moist static energy','J/m2/s','tt0t')
-!      call ncinfo(ncmsename( 5,:),'tnfmsevar','total tendency of spatial variance of mass-weighted vertical integral of frozen moist static energy','J2/m4/s','tt0t')
+    write(fname,'(A,i3.3,A,i3.3,A)') 'mse_budget.', myidx, '.', myidy, '.xxx.nc'    !rce table 6 2D hourly averaged variables
+    fname(20:22) = cexpnr
+    call ncinfo(tmsencname(1,:),'time','Time','s','time')
+    call ncinfo(ncmsename( 1,:),'fmse'     ,'mass-weighted vertical integral of frozen moist static energy','J/m2','tt0t')
+    call ncinfo(ncmsename( 2,:),'hadvmse'  ,'mass-weighted vertical integral of horizontal advective tendency of frozen moist static energy','J/m2/s','tt0t')
+    call ncinfo(ncmsename( 3,:),'vadvmse'  ,'mass-weighted vertical integral of vertical advective tendency of frozen moist static energy','J/m2/s','tt0t')
+    call ncinfo(ncmsename( 4,:),'tnfmse'   ,'total tendency of mass-weighted vertical integral of frozen moist static energy','J/m2/s','tt0t')
+    !      call ncinfo(ncmsename( 5,:),'tnfmsevar','total tendency of spatial variance of mass-weighted vertical integral of frozen moist static energy','J2/m4/s','tt0t')
 
-      call open_nc(trim(output_prefix)//fname, ncid3,nrec3,n1=imax,n2=jmax)
-      if (nrec3==0) then
-        call define_nc( ncid3, 1, tmsencname)
-        call writestat_dims_nc(ncid3)
-      end if
-     call define_nc( ncid3, nmsevar, ncmsename)
+    call open_nc(trim(output_prefix)//fname, ncid3,nrec3,n1=imax,n2=jmax)
+    if (nrec3==0) then
+      call define_nc( ncid3, 1, tmsencname)
+      call writestat_dims_nc(ncid3)
+    end if
+    call define_nc( ncid3, nmsevar, ncmsename)
 
    end subroutine initmsebudg
 
@@ -243,37 +243,35 @@ contains
      end subroutine msebudg1
 
 
-! Step 2 of MSE budget. Called after tstep_integrate.
-     subroutine msebudg2
-       use modglobal, only : i1,j1,k1,imax,jmax,rdt,dzf,&
-                             rk3step,timee,rtimee,dt_lim,cp,grav,rlv,zf
-       use modfields, only : rhobf,tmp0,qt0,ql0
-       use modstat_nc, only : lnetcdf, writestat_nc
-       implicit none
+      ! Step 2 of MSE budget. Called after tstep_integrate.
+      subroutine msebudg2
+        use modglobal, only : i1,j1,k1,imax,jmax,rdt,dzf,&
+                              rk3step,timee,rtimee,dt_lim,cp,grav,rlv,zf
+        use modfields, only : rhobf,tmp0,qt0,ql0
+        use modstat_nc, only : writestat_nc
+        implicit none
 
-       integer k
-       real, allocatable :: vars(:,:,:)
+        integer k
+        real, allocatable :: vars(:,:,:)
 
-       if (.not. lmsebudg) return
-       if (rk3step/=3) return
+        if (.not. lmsebudg) return
+        if (rk3step/=3) return
 
-       if(timee<tnext) then
-          dt_lim = min(dt_lim,tnext-timee)
-          return
-       end if
+        if(timee<tnext) then
+            dt_lim = min(dt_lim,tnext-timee)
+            return
+        end if
 
-       tnext = tnext+idtav
-       dt_lim = min(dt_lim, tnext-timee)
+        tnext = tnext+idtav
+        dt_lim = min(dt_lim, tnext-timee)
 
-       do k=1,k1
-          mse0(:,:,k)  = cp * tmp0(:,:,k) + grav * zf(k) + rlv * (qt0(:,:,k) - ql0(:,:,k))
-          field_mse_2D (2:i1,2:j1,1) = field_mse_2D (2:i1,2:j1,1) + rhobf(k) * dzf(k) * mse0(2:i1,2:j1,k)     ! current value from 0-field
-       end do
+        do k=1,k1
+            mse0(:,:,k)  = cp * tmp0(:,:,k) + grav * zf(k) + rlv * (qt0(:,:,k) - ql0(:,:,k))
+            field_mse_2D (2:i1,2:j1,1) = field_mse_2D (2:i1,2:j1,1) + rhobf(k) * dzf(k) * mse0(2:i1,2:j1,k)     ! current value from 0-field
+        end do
 
-       field_mse_2D (2:i1,2:j1,4) =  (field_mse_2D (2:i1,2:j1,1) - field_mse_2D (2:i1,2:j1,4)) / rdt  ! total tendency = (mse0-msem)/dt
+        field_mse_2D (2:i1,2:j1,4) =  (field_mse_2D (2:i1,2:j1,1) - field_mse_2D (2:i1,2:j1,4)) / rdt  ! total tendency = (mse0-msem)/dt
 
-
-       if (lnetcdf) then
           allocate(vars(imax,jmax,Nmse_2D))
 
           vars(1:imax,1:jmax,:) = field_mse_2D (2:i1,2:j1,:)
@@ -281,14 +279,13 @@ contains
           call writestat_nc(ncid3,1,tmsencname,(/rtimee/),nrec3,.true.)
           call writestat_nc(ncid3,nmsevar,ncmsename,vars,nrec3,imax,jmax)
           deallocate(vars)
-       end if
 
-       !write (*,*) '*** MSE2 step:', rk3step, 'time:', timee, 'rdt:', rdt
-     end subroutine msebudg2
+        !write (*,*) '*** MSE2 step:', rk3step, 'time:', timee, 'rdt:', rdt
+      end subroutine msebudg2
 
 
   subroutine exitmsebudg
-    use modstat_nc, only : exitstat_nc,lnetcdf
+    use modstat_nc, only : exitstat_nc
     implicit none
 
     if(.not.(lmsebudg)) return
@@ -296,7 +293,7 @@ contains
     deallocate(field_mse_2D)
     deallocate(mse0,msem)
 
-    if(lmsebudg .and. lnetcdf) call exitstat_nc(ncid3)
+    if(lmsebudg) call exitstat_nc(ncid3)
   end subroutine exitmsebudg
 
 

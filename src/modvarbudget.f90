@@ -47,10 +47,10 @@ contains
 
   subroutine initvarbudget
     use modmpi,     only : myid,mpierr, comm3d, D_MPI_BCAST
-    use modglobal,  only : k1,ih,i1,jh,j1,ifnamopt,fname_options, ifoutput,&
+    use modglobal,  only : k1,ih,i1,jh,j1,ifnamopt,fname_options,&
                            cexpnr,dtav_glob,timeav_glob,dt_lim,btime,tres,&
                            lwarmstart,checknamelisterror,ladaptive,dtmax
-    use modstat_nc, only : lnetcdf,define_nc,ncinfo,nctiminfo,writestat_dims_nc
+    use modstat_nc, only : define_nc,ncinfo,nctiminfo,writestat_dims_nc
     use modgenstat, only : idtav_prof=>idtav, itimeav_prof=>itimeav,ncid_prof=>ncid
     use modmicrodata, only : qtpmcr, imicro, imicro_bulk, imicro_sice, imicro_sice2
     use fortran_support, only: nnml_output
@@ -129,35 +129,29 @@ contains
     qt2residf = 0.
     qt2bf     = 0.
 
-    if(myid==0 .and. .not. lwarmstart) then
-       open (ifoutput,file='varbudget.'//cexpnr,status='replace')
-       close (ifoutput)
+    idtav      = idtav_prof
+    itimeav    = itimeav_prof
+    tnext      = idtav+btime
+    tnextwrite = itimeav+btime
+    nsamples   = int(itimeav / idtav)
+    
+    if (myid==0) then
+      call ncinfo(ncname( 1,:),'thl2tendf','Tendency of thl variance','K^2/s','tt')
+      call ncinfo(ncname( 2,:),'thl2Pr','Resolved production of thl variance','K^2/s','tt')
+      call ncinfo(ncname( 3,:),'thl2Ps','SFS production of thl variance','K^2/s','tt')
+      call ncinfo(ncname( 4,:),'thl2Tr','Resolved transport of thl variance','K^2/s','tt')
+      call ncinfo(ncname( 5,:),'thl2D','Dissipation of thl variance','K^2/s','tt')
+      call ncinfo(ncname( 6,:),'thl2S','Source of thl variance','K^2/s','tt')
+      call ncinfo(ncname( 7,:),'thl2Res','Residual of thl budget','K^2/s','tt')
+      call ncinfo(ncname( 8,:),'qt2tendf','Tendency of qt variance','kg^2/kg^2/s','tt')
+      call ncinfo(ncname( 9,:),'qt2Pr','Resolved production of qt variance','kg^2/kg^2/s','tt')
+      call ncinfo(ncname(10,:),'qt2Ps','SFS production of qt variance','kg^2/kg^2/s','tt')
+      call ncinfo(ncname(11,:),'qt2Tr','Resolved transport of qt variance','kg^2/kg^2/s','tt')
+      call ncinfo(ncname(12,:),'qt2D','Dissipation of qt variance','kg^2/kg^2/s','tt')
+      call ncinfo(ncname(13,:),'qt2S','Source of qt variance','kg^2/kg^2/s','tt')
+      call ncinfo(ncname(14,:),'qt2Res','Residual of qt budget','kg^2/kg^2/s','tt')
+      call define_nc( ncid_prof, NVar, ncname)
     end if
-    if (lnetcdf) then
-      idtav      = idtav_prof
-      itimeav    = itimeav_prof
-      tnext      = idtav+btime
-      tnextwrite = itimeav+btime
-      nsamples   = int(itimeav / idtav)
-     if (myid==0) then
-        call ncinfo(ncname( 1,:),'thl2tendf','Tendency of thl variance','K^2/s','tt')
-        call ncinfo(ncname( 2,:),'thl2Pr','Resolved production of thl variance','K^2/s','tt')
-        call ncinfo(ncname( 3,:),'thl2Ps','SFS production of thl variance','K^2/s','tt')
-        call ncinfo(ncname( 4,:),'thl2Tr','Resolved transport of thl variance','K^2/s','tt')
-        call ncinfo(ncname( 5,:),'thl2D','Dissipation of thl variance','K^2/s','tt')
-        call ncinfo(ncname( 6,:),'thl2S','Source of thl variance','K^2/s','tt')
-        call ncinfo(ncname( 7,:),'thl2Res','Residual of thl budget','K^2/s','tt')
-        call ncinfo(ncname( 8,:),'qt2tendf','Tendency of qt variance','kg^2/kg^2/s','tt')
-        call ncinfo(ncname( 9,:),'qt2Pr','Resolved production of qt variance','kg^2/kg^2/s','tt')
-        call ncinfo(ncname(10,:),'qt2Ps','SFS production of qt variance','kg^2/kg^2/s','tt')
-        call ncinfo(ncname(11,:),'qt2Tr','Resolved transport of qt variance','kg^2/kg^2/s','tt')
-        call ncinfo(ncname(12,:),'qt2D','Dissipation of qt variance','kg^2/kg^2/s','tt')
-        call ncinfo(ncname(13,:),'qt2S','Source of qt variance','kg^2/kg^2/s','tt')
-        call ncinfo(ncname(14,:),'qt2Res','Residual of qt budget','kg^2/kg^2/s','tt')
-        call define_nc( ncid_prof, NVar, ncname)
-     end if
-
-   end if
 
   end subroutine initvarbudget
 
@@ -618,9 +612,9 @@ contains
 
   subroutine writevarbudget
 
-    use modglobal,  only : kmax,k1,zh,zf,rtimee,cexpnr,ifoutput
+    use modglobal,  only : kmax,k1,zh,zf,rtimee,cexpnr
     use modmpi,     only : myid
-    use modstat_nc, only : lnetcdf, writestat_nc
+    use modstat_nc, only : writestat_nc
     use modgenstat, only : ncid_prof=>ncid,nrec_prof=>nrec
     implicit none
 
@@ -669,44 +663,24 @@ contains
  !-------------------------------------------------------------
 
     if(myid==0)then
+      vars(:, 1)=thl2tendf
+      vars(:, 2)=thl2Prfmn
+      vars(:, 3)=thl2Psfmn
+      vars(:, 4)=thl2Trfmn
+      vars(:, 5)=thl2Disfmn
+      vars(:, 6)=thl2Sfmn
+      vars(:, 7)=thl2residf
+      vars(:, 8)=qt2tendf
+      vars(:, 9)=qt2Prfmn
+      vars(:,10)=qt2Psfmn
+      vars(:,11)=qt2Trfmn
+      vars(:,12)=qt2Disfmn
+      vars(:,13)=qt2Sfmn
+      vars(:,14)=qt2residf
+      call writestat_nc(ncid_prof,nvar,ncname,vars(1:kmax,:),nrec_prof,kmax)
+    end if
 
-      open (ifoutput,file='varbudget.'//cexpnr,position='append')
-
-      call writebudget ( &
-                nsecs,nhrs,nminut,timeav,'thl', &
-                thl2tendf,thl2Prfmn ,thl2Psfmn, &
-                thl2Trfmn,thl2Disfmn,thl2Sfmn , &
-                thl2residf                    , &
-                k1,zh,zf,ifoutput)
-
-      call writebudget ( &
-                nsecs,nhrs,nminut,timeav,'qt_', &
-                qt2tendf,qt2Prfmn ,qt2Psfmn   , &
-                qt2Trfmn,qt2Disfmn,qt2Sfmn    , &
-                qt2residf                     , &
-                k1,zh,zf,ifoutput)
-
-      if (lnetcdf) then
-        vars(:, 1)=thl2tendf
-        vars(:, 2)=thl2Prfmn
-        vars(:, 3)=thl2Psfmn
-        vars(:, 4)=thl2Trfmn
-        vars(:, 5)=thl2Disfmn
-        vars(:, 6)=thl2Sfmn
-        vars(:, 7)=thl2residf
-        vars(:, 8)=qt2tendf
-        vars(:, 9)=qt2Prfmn
-        vars(:,10)=qt2Psfmn
-        vars(:,11)=qt2Trfmn
-        vars(:,12)=qt2Disfmn
-        vars(:,13)=qt2Sfmn
-        vars(:,14)=qt2residf
-        call writestat_nc(ncid_prof,nvar,ncname,vars(1:kmax,:),nrec_prof,kmax)
-      endif
-
-    endif   !endif loop write myid=0
-
-!        reset variables
+    !        reset variables
 
     thl2Prfmn  = 0.
     thl2Psfmn  = 0.

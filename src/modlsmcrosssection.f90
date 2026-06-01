@@ -68,8 +68,7 @@ contains
   subroutine initlsmcrosssection
     use modmpi,     only : myid, myidy, mpierr, comm3d, D_MPI_BCAST
     use modglobal,  only : ifnamopt, fname_options, dtmax, dtav_glob, ladaptive, &
-      j1, jmax, dy, y0, dt_lim, tres, btime, checknamelisterror, itot, jtot
-    use modstat_nc, only : lnetcdf
+                          j1, jmax, dy, y0, dt_lim, tres, btime, checknamelisterror, itot, jtot
     use modsurfdata, only : isurf
     use modlsm,     only : lags
     use fortran_support, only : nnml_output
@@ -104,11 +103,6 @@ contains
        call warning (routine, "Ignoring lcrosssoil, lsm soil crossection currently implemented only for isurf==1 or 11.")
     endif
 
-    if (lcross .and. .not. lnetcdf) then
-       lcross = .FALSE.
-       call warning (routine, "Ignoring lcross, lcross output implemented only for netcdf output.")
-    endif
-
     call D_MPI_BCAST(dtav       ,1,0,comm3d,mpierr)
     call D_MPI_BCAST(lcross     ,1,0,comm3d,mpierr)
     call D_MPI_BCAST(lcrosssoil ,1,0,comm3d,mpierr)
@@ -130,8 +124,6 @@ contains
         call finish(routine, 'lsmcrosssection: dtav should be a integer multiple of dtmax')
       end if
 
-      if (.not. lnetcdf) return
-
       if (crossplane_local >= 2 .and. crossplane_local <= j1) then
         write(cloc, '(i4.4)') crossplane_global
         loc = y0 + dy * (crossplane_global - 1) + 0.5_field_r * dy
@@ -150,7 +142,7 @@ contains
       soil_xy_enabled = .true.
     end if
 
-    if (lcross.and.lnetcdf) then
+    if (lcross) then
       surf_file = cross_section_file_t('surfcross', nx=itot, ny=jtot, lgpu=.false.)
       surf_enabled = .true.
       call add_output_file(surf_file, dtav, surf_file_id)
@@ -228,8 +220,7 @@ contains
 
 !> Do the xz lsmcrosssections and dump them to file
   subroutine wrtvert
-    use modglobal,   only : i1, j1, cexpnr, ifoutput
-    use modstat_nc,  only : lnetcdf
+    use modglobal,   only : i1, j1, cexpnr
     use modsurfdata, only : tsoil, phiw
 
     implicit none
@@ -239,15 +230,7 @@ contains
 
     if (crossplane_local < 2 .or. crossplane_local > j1) return
 
-    open(ifoutput,file='movv_tsoil.'//cexpnr,position='append',action='write')
-    write(ifoutput,'(es12.5)') ((tsoil(i,crossplane_local,k),i=2,i1),k=1,ksoilmax)
-    close(ifoutput)
-
-    open(ifoutput,file='movv_phiw.'//cexpnr,position='append',action='write')
-    write(ifoutput,'(es12.5)') ((phiw(i,crossplane_local,k),i=2,i1),k=1,ksoilmax)
-    close(ifoutput)
-
-    if (.not. (lnetcdf .and. soil_xz_enabled)) return
+    if (.not. (soil_xz_enabled)) return
 
     call soil_xz_file%get_pointer('tsoil', tsoil_ptr)
     call soil_xz_file%get_pointer('phiw', phiw_ptr)
@@ -258,8 +241,7 @@ contains
 
 !> Do the xy lsmcrosssections and dump them to file
   subroutine wrthorz
-    use modglobal,   only : i1, j1, cexpnr, ifoutput
-    use modstat_nc,  only : lnetcdf
+    use modglobal,   only : i1, j1, cexpnr
     use modsurfdata, only : tsoil, phiw
 
     implicit none
@@ -267,16 +249,7 @@ contains
     integer :: i, j
     real(field_r), pointer :: tsoil_ptr(:,:), phiw_ptr(:,:)
 
-    write(cheight,'(i4.4)') crossheight
-    open(ifoutput,file='movh_tsoil.'//cexpnr,position='append',action='write')
-    write(ifoutput,'(es12.5)') ((tsoil(i,j,crossheight),i=2,i1),j=2,j1)
-    close(ifoutput)
-
-    open(ifoutput,file='movh_phiw.'//cexpnr,position='append',action='write')
-    write(ifoutput,'(es12.5)') ((phiw(i,j,crossheight),i=2,i1),j=2,j1)
-    close(ifoutput)
-
-    if (.not. (lnetcdf .and. soil_xy_enabled)) return
+    if (.not. (soil_xy_enabled)) return
 
     call soil_xy_file%get_pointer('tsoil', tsoil_ptr)
     call soil_xy_file%get_pointer('phiw', phiw_ptr)
@@ -290,7 +263,6 @@ contains
     use modglobal,   only : i1, j1, cp, rlv
     use modfields,   only : rhof
     use modlsm,      only : f1, f2b, lags, an_co2, resp_co2
-    use modstat_nc,  only : lnetcdf
     use modsurfdata, only : Qnet, H, LE, G0, rs, ra, tskin, tendskin, &
                             cliq, rsveg, rssoil, Wl, isurf, obl, ustar, &
                             Cs, Cm, z0h, z0m, qtflux, thlflux
@@ -302,7 +274,7 @@ contains
                               hfss_ptr(:,:), hfls_ptr(:,:), obuk_ptr(:,:), ustar_ptr(:,:), cs_ptr(:,:), cm_ptr(:,:), &
                               z0h_ptr(:,:), z0m_ptr(:,:), f1_ptr(:,:), f2_b_ptr(:,:), an_co2_ptr(:,:), resp_co2_ptr(:,:)
 
-    if (.not. (lnetcdf .and. surf_enabled)) return
+    if (.not. (surf_enabled)) return
 
     if (isurf == 1) then
       call surf_file%get_pointer('Qnet', qnet_ptr)

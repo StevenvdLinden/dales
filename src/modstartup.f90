@@ -1750,9 +1750,9 @@ contains
             else
               pmat(j)=exp((log(pmat(j-1))*lapserate(j)*rd+log(tmat(j-1)+zmat(j-1)*lapserate(j))*grav-&
                 log(tmat(j-1)+zmat(j)*lapserate(j))*grav)/(lapserate(j)*rd))
-            endif
+            end if
             tmat(j)=tmat(j-1)+lapserate(j)*(zmat(j)-zmat(j-1));
-          enddo
+          end do
 
           do k=1,k1
             if(zf(k)<zmat(1)) then
@@ -1770,10 +1770,11 @@ contains
               else
                 pb(k)=exp((log(pmat(j-1))*lapserate(j)*rd+log(tmat(j-1)+zmat(j-1)*lapserate(j))*grav-&
                   log(tmat(j-1)+zf(k)*lapserate(j))*grav)/(lapserate(j)*rd))
-              endif
-            endif
+              end if
+            end if
             rhobf(k)=pb(k)/(rd*tb(k)) ! dry estimate
-          enddo
+          end do
+        end if
 
         ! Write background profiles in all cases
         open (ifoutput,file='baseprof.inp.'//cexpnr)

@@ -106,14 +106,14 @@ subroutine exittstep
 end subroutine exittstep
 
 subroutine tstep_update
-  use modglobal, only : i1,j1,k1,i2,j2,rk3step,timee,rtimee,dtmax,dt,ntrun,courant,peclet,dt_reason,nsv, &
-                        kmax,dx,dy,dzh,dt_lim,ladaptive,timeleft,idtmax,rdt,tres,longint ,lwarmstart
-  use modfields, only : um,vm,wm,up,vp,wp,thlp,svp,qtp,e12p
+  use modglobal, only : i1,j1,timee,rtimee,dtmax,dt,ntrun,courant,peclet,dt_reason, &
+                        kmax,dx,dy,dzh,dt_lim,ladaptive,timeleft,idtmax,rdt,tres,longint,lwarmstart
+  use modfields, only : um,vm,wm
   use modsubgrid,only : ekm,ekh
   use modmpi,    only : comm3d,mpierr,mpi_max,D_MPI_ALLREDUCE
   implicit none
 
-  integer       :: i, j, k, n
+  integer       :: i, j, k
   real,save     :: courtotmax=-1,peclettot=-1
   real          :: courold, cfl_sq_l, cfl_sq, peclettotl, pecletold, pe_ekm, pe_ekh, min_size_sq
   logical,save  :: spinup=.true.

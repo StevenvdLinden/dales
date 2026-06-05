@@ -96,18 +96,17 @@ contains
   !> Initializes the immersed boundary method by reading obstacles and placing them on the grid.
   subroutine initibm
 
-    use modglobal,        only : zh, zf, itot, jtot, ih, i1, i2, jh, j1, j2, k1, imax, jmax, kmax, cexpnr, ifinput, &
-                                nsv, cu, cv, ijtot, &
+    use modglobal,        only : zf, itot, jtot, ih, i1, i2, jh, j1, j2, k1, imax, jmax, kmax, cexpnr, ifinput, &
+                                cu, cv, &
                                 iadv_mom,iadv_tke,iadv_thl,iadv_qt,iadv_sv,iadv_cd2, &
                                 ibas_prf, &
                                 dx,dy,fkar
     use modsurface,       only : lmostlocal
     use modsubgriddata,   only : lanisotrop, lsmagorinsky
-    use fortran_support,  only : nnml_output
 
     implicit none
 
-    integer         :: i, j, k, ierr, no = 0
+    integer         :: i, j, k, no = 0
     integer         :: advarr(5)
     character(100)  :: readstring
 
@@ -422,7 +421,7 @@ contains
     use modfields,      only : u0, v0, w0, thl0, qt0, e120, sv0, &
                                up, vp, wp, thlp, qtp, e12p, svp, &
                                thl0av, qt0av, rhobf, rhobh
-    use modglobal,      only : rk3step, kmax, i1, j1, k1, ih, jh, rdt, timee, dx, dy, dx2i, dy2i, dzh, dzhi, dzf, dzfi, zf, zh, nsv, e12min, fkar
+    use modglobal,      only : rk3step, kmax, rdt, dx, dy, dx2i, dy2i, dzh, dzhi, dzf, dzfi, zf, zh, nsv, e12min, fkar
     use modsurface,     only : lneutral, lmostlocal
     use modsubgriddata, only : ekm, ekh
     use modmpi,         only : excjs
@@ -437,7 +436,7 @@ contains
     real(field_r)     :: u_at_v_min, u_at_v_plus, v_at_u_min, v_at_u_plus
     real(field_r)     :: w_at_v_min, w_at_v_plus, w_at_u_min, w_at_u_plus
     real(field_r)     :: u_at_w_min, u_at_w_plus, v_at_w_min, v_at_w_plus
-    real(field_r)     :: uspeed, ucc, vcc, z_MO
+    real(field_r)     :: uspeed, ucc, vcc
     real(field_r)     :: tau_vu_plus, tau_vu_min, tau_wu_min, tau_wu_plus, tau_uv_min, tau_uv_plus, tau_wv_min, tau_wv_plus
     real              :: Lob
     
@@ -817,8 +816,7 @@ contains
   subroutine zerowallvelocity
 
     use modfields,      only : up, vp, wp, u0, v0, w0
-    use modglobal,      only : rk3step, kmax, i1, j1, k1, ih, jh, rdt
-    use modmpi,         only : excjs
+    use modglobal,      only : rk3step, rdt
 
     implicit none
     integer  :: i, j, k, nn
@@ -827,7 +825,7 @@ contains
     rk3coef = rdt / (4. - dble(rk3step))
     rk3coefi = 1. / rk3coef
 
-    ! Set tendencies inside obstacled (i.e., correct for any drift from previous integration step)
+    ! Set tendencies inside obstacle (i.e., correct for any drift from previous integration step)
     do nn = 1,Nobst_wide
       i = iobst(nn,1)
       j = iobst(nn,2)

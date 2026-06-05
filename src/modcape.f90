@@ -37,14 +37,7 @@ character(len=*), parameter :: modname = 'modcape'
 PUBLIC :: initcape,docape
 save
 !NetCDF variables
-  integer,parameter :: nvar = 25
-  integer :: ncid4 = 0
-  integer :: nrec = 0
-  character(80) :: fname = 'cape.xxxxyxxx.xxx.nc'
-  character(80),dimension(nvar,4) :: ncname
-  character(80),dimension(1,4) :: tncname
   real    :: dtav
-  integer(kind=longint) :: idtav,tnext
   logical :: lcape = .false. !< switch for doing the crosssection (on/off)
 
   type(cross_section_file_t) :: ofile
@@ -54,9 +47,8 @@ contains
 
 !> Initializing cape crossections. Read out the namelist, initializing the variables
   subroutine initcape
-    use modmpi,   only :myid,mpierr,comm3d,cmyid,D_MPI_BCAST
-    use modglobal,only :imax,jmax,ifnamopt,fname_options,dtmax,dtav_glob,ladaptive,dt_lim,cexpnr,tres,btime,checknamelisterror,&
-                        output_prefix
+    use modmpi,   only :myid,mpierr,comm3d,D_MPI_BCAST
+    use modglobal,only :ifnamopt,fname_options,dtav_glob,checknamelisterror
     use modstat_nc,only : open_nc, define_nc, redefine_nc,ncinfo,nctiminfo,writestat_dims_nc
     use fortran_support, only: nnml_output
    implicit none
@@ -115,7 +107,7 @@ contains
 
 !>Run crosssection.
   subroutine docape
-    use modglobal, only : imax,jmax,i1,j1,k1,kmax,rlv,cp,rv,rd,rk3step,timee,rtimee,dt_lim,grav,eps1,&
+    use modglobal, only : i1,j1,k1,kmax,rlv,cp,rv,rd,grav,eps1,&
     zf,dzf,tup,tdn,zh,kcb
     use modfields, only : u0,v0,thl0,qt0,ql0,w0,sv0,exnf,thvf,exnf,presf,rhobf
     use modstat_nc, only : writestat_nc

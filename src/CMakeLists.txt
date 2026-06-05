@@ -108,7 +108,6 @@ set( dales_srcs
 	modstat_nc.f90
 	modstat_nc_files.f90
 	modstat_profiles.f90
-	modstattend.f90
 	modsubgrid.f90
 	modsubgriddata.f90
 	modsurface.f90

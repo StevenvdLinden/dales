@@ -1714,6 +1714,8 @@ contains
 
     allocate (height(k1),pb(k1),tb(k1),pbh(k1))
 
+    pb = -9999. ! Fill pressure with large negative FillValue, only overwrite for ibas_prf > 2
+
     if(myid==0)then
 
       if( (.not. lwarmstart) .and. (ibas_prf /= ibas_usr) ) then
@@ -1813,11 +1815,12 @@ contains
         ! Write background profiles in all cases
         open (ifoutput,file='baseprof.inp.'//cexpnr)
         write(ifoutput,*) '#baseprofiles'
-        write(ifoutput,*) '#height rhobf'
+        write(ifoutput,*) '#height rhobf pb'
         do k=1,kmax
-          write (ifoutput,'(1f7.1,E25.17)') &
+          write (ifoutput,'(1f7.1,E25.17,E25.17)') &
                 zf (k), &
-                rhobf (k)
+                rhobf (k), &
+                pb (k)
         end do
         close(ifoutput)
 
@@ -1836,7 +1839,8 @@ contains
         do k = 1, kmax
           read (ifinput,*) &
                   height(k), &
-                  rhobf (k)
+                  rhobf (k), &
+                  pb    (k)
         end do
         close(ifinput)
 

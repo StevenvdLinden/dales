@@ -180,6 +180,7 @@ contains
     use modraddata, only : iradiation,rad_shortw,irad_par,irad_user,irad_rrtmg,irad_rte_rrtmgp
     use modmpi,     only : myid,  myidx, myidy, comm3d, mpierr, D_MPI_BCAST
     use modtracers, only : tracer_prop
+    use modibmdata, only : lapply_ibm
     use fortran_support, only: nnml_output
     use netcdf
 
@@ -194,6 +195,11 @@ contains
     character(len=1500) :: readbuffer
 
     call timer_tic('modsurface/initsurface', 0)
+
+    if ( .not.(lmostlocal) .and. lapply_ibm ) then
+      call finish(routine, &
+          'ERROR: Immersed Boundaries require local Monin-Obukhov calculation (lmostlocal = .true.).')  
+    end if
 
     ! 1    -   Initialize soil
 
@@ -596,7 +602,7 @@ contains
     ! BUG: use local variable lthls for reduction to prevent name conflict with namelist?
     lthls = 0.0
     qts = 0.0
-    !$acc parallel loop collapse(2) default(present) reduction(+: thls, qts)
+    !$acc parallel loop collapse(2) default(present) reduction(+: lthls, qts)
     !$omp target teams loop reduction(+:lthls,qts) collapse(2)&
     !$omp defaultmap(present:aggregate) defaultmap(present:allocatable)
     do j = 2, j1

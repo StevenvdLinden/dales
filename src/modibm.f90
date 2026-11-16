@@ -31,7 +31,7 @@ module modibm
   use modprecision,    only : field_r
   use modmpi,          only : myid, comm3d, mpierr, myidx, myidy, d_mpi_bcast, excjs, d_mpi_allreduce, &
                             mpi_max, mpi_sum
-  use modsurface,      only : psim, psih, calc_obl_iter
+  use modsurface,      only : psim, psih, phim, phih, calc_obl_iter
   use modibmdata,      only : lapply_ibm,lpoislast, lwallheat, &
                             thlwall, qtwall, thlroof, qtroof, thlibm, qtibm, &
                             z0m_wall, z0h_wall, fluid_mask
@@ -130,52 +130,46 @@ contains
 
       ! Do some checks for conflicting settings and warn/stop further execution
       if ( lapply_ibm ) then
-        if (abs(cu) > 0) call finish(routine, 'Domain translation not allowed with IBM, set cu to zero')  
-        if (abs(cv) > 0) call finish(routine, 'Domain translation not allowed with IBM, set cv to zero')  
+        if (abs(cu) > 0) call finish(routine, 'Domain translation not allowed with IBM, set cu to zero')
+        if (abs(cv) > 0) call finish(routine, 'Domain translation not allowed with IBM, set cv to zero')
 
-        if (ibas_prf .ne. 2) then
+        if ( ibas_prf .ne. 2 ) then
           ibas_prf = 2
           call warning(routine, &
               'ibas_pr is overwritten to 2 (Boussinesq approximation with constant density) ' // &
               'height dependent density gives probles with correction of vertical advective '  // &
               'tendencies at the top of obstacles'  &
-          )  
+          )
         end if
 
         ! TODO: implement kappa advection for tracers
         advarr = (/iadv_mom,iadv_tke,iadv_thl,iadv_qt,iadv_sv/)
-        if (any(advarr/=iadv_cd2)) then
+        if ( any(advarr/=iadv_cd2) ) then
           call finish(routine, &
               'Current IBM implementation only works with 2nd order advection. '  // &
               'Proper check for kappa advection of scalars to be implemented'&
-          )  
+          )
         end if
 
         if ( lanisotrop ) then
           call warning(routine, &
               'WARNING: you are using IBM with anisotropic grids in x,y-direction '  // & 
               'while possible, this may cause unexpected results (blending effects)' &
-          )  
+          )
         end if
 
         if ( .not.(lsmagorinsky) ) then
           call warning(routine, &
               'WARNING: subgrid TKE (e120) is not (yet) explicitly corrected for walls. '  // &
               'This includes production, destruction and dissipation terms in sgs-tke budget' &
-          )  
+          )
         end if
 
-        !! Check doesn't work currently, related to order in startup routine
-        ! if ( .not. lmostlocal ) then
-        !   stop 'ERROR: you must use local monin-obukhov with IBM'
-        ! end if
-
       end if
-
     end if
 
     ! Step out of further subroutine when IBM is switched off
-    if (.not. (lapply_ibm)) then
+    if ( .not. (lapply_ibm) ) then
        call timer_toc('modibm/initibm')
        return
     endif
@@ -537,13 +531,14 @@ contains
   !> Applies the immersed boundary through forcings.
   subroutine applyibm
 
-    use modfields,      only : u0, v0, w0, thl0, qt0, e120, sv0, &
-                               up, vp, wp, thlp, qtp, e12p, svp, &
-                               thl0av, qt0av, rhobf, rhobh
-    use modglobal,      only : rk3step, kmax, i1, j1, k1, ih, jh, rdt, timee, dx, dy, dx2i, dy2i, dzh, dzhi, dzf, dzfi, zf, zh, nsv, e12min, fkar
-    use modsurface,     only : lneutral, lmostlocal
-    use modsubgriddata, only : ekm, ekh
-    use modmpi,         only : excjs
+    use modfields,          only : u0, v0, w0, thl0, qt0, e120, sv0, &
+                                   up, vp, wp, thlp, qtp, e12p, svp, &
+                                   thl0av, qt0av, rhobf, rhobh, dthvdz, thvf
+    use modglobal,          only : rk3step, kmax, i1, j1, k1, ih, jh, rdt, timee, dx, dy, dxi, dyi, dx2i, dy2i, dzh, dzhi, dzf, dzfi, zf, zh, nsv, e12min, fkar
+    use modsurface,         only : lneutral, lmostlocal
+    use modsubgriddata,     only : ekm, ekh, lsmagorinsky
+    use modthermodynamics,  only: lmoist
+    use modmpi,             only : excjs
 
     implicit none
 
@@ -557,6 +552,7 @@ contains
     real(field_r)     :: u_at_w_min, u_at_w_plus, v_at_w_min, v_at_w_plus
     real(field_r)     :: uspeed, ucc, vcc, z_MO, Cm_zwall, Cd_zwall
     real(field_r)     :: tau_vu_plus, tau_vu_min, tau_wu_min, tau_wu_plus, tau_uv_min, tau_uv_plus, tau_wv_min, tau_wv_plus
+    real(field_r)     :: tdef2_wrong, tdef2_corr, dudz_most, dvdz_most, dtdz_most, dvdx_log, dwdx_log, dudy_log, dwdy_log ! TODO: check variable naming dtdz_most (when lmoist=.true.)
     real              :: Lob
     
     if (.not. lapply_ibm) return
@@ -579,10 +575,10 @@ contains
       up(i,j,k)   = -u0(i,j,k)*rk3coefi
       vp(i,j,k)   = -v0(i,j,k)*rk3coefi
       wp(i,j,k)   = -w0(i,j,k)*rk3coefi
-      thlp(i,j,k) = (thlibm - thl0(i,j,k))*rk3coefi
-      qtp (i,j,k) = (qtibm  - qt0(i,j,k) )*rk3coefi
-      e12p(i,j,k) = (e12min - e120(i,j,k))*rk3coefi   ! Maintain e12min to prevent ekm/ekh going to NaN
-                                                      ! Maybe better to explicitly set eddy diffusivities to tiny value
+      if ( .not. lneutral )     thlp(i,j,k) = (thlibm - thl0(i,j,k))*rk3coefi
+      if ( lmoist )             qtp (i,j,k) = (qtibm  - qt0(i,j,k) )*rk3coefi
+      if ( .not. lsmagorinsky ) e12p(i,j,k) = (e12min - e120(i,j,k))*rk3coefi   ! Maintain e12min to prevent ekm/ekh going to NaN
+                                                                                ! Maybe better to explicitly set eddy diffusivities to tiny value
       do nc=1,nsv
           svp(i,j,k,nc) = - sv0(i,j,k,nc)*rk3coefi
       end do
@@ -592,9 +588,10 @@ contains
     ! All corrections consist of 2 parts: cancel the "wrong" diffusion imposed by modsubgrid at fluid points at the wall, and add wall friction/flux.
     ! In this framework, we assume no correction for advection is needed, as velocities at walls should already be close to zero 
     ! TODO: 1. do explicitly remove advective tendencies over walls (mainly for improvement of conservations of scalars)
-    !       2. apply IBM conditions explicitly to e12 as well
+    !       2. adapt the length scale (or directly ekm/ekh) near buildings to get correct diffusivity
+    !       ~2. WIP: apply IBM conditions explicitly to e12 as well~
 
-    ! Correct tendencies for walls in positive z-direction (only works when k>1, which should be the case for vertical walls [see initibm])
+    ! Correct tendencies for walls in positive z-direction (only works when k > 1, which should be the case for vertical walls [see initibm])
     do color_index = 1,2
       !$acc parallel loop gang vector default(present)
       !$omp target teams loop defaultmap(present:aggregate)&
@@ -655,23 +652,69 @@ contains
           Cm_zwall = fkar**2 / (log(z_MO / z0m_wall) - psim(z_MO / Lob) + psim(z0m_wall / Lob))** 2
           Cd_zwall = fkar**2 / (log(z_MO / z0m_wall) - psim(z_MO / Lob) + psim(z0m_wall / Lob)) / (log(z_MO / z0h_wall) - psih(z_MO / Lob) + psih(z0h_wall / Lob))
         end if
-              
-        up(i  ,j,k) = up(i  ,j,k) - 0.25_field_r * rhobh(k)/rhobf(k) * Cm_zwall * ( u0(i,j,k) + u0(i+1,j,k) ) * uspeed * dzfi(k)
+        
+        up(i  ,j,k) = up(i  ,j,k) - 0.25_field_r * rhobh(k)/rhobf(k) * Cm_zwall * ( u0(i,j,k) + u0(i+1,j,k) ) * uspeed * dzfi(k) ! Multiplication with dzfi(k) comes from taking the flux divergence over full cell
         up(i+1,j,k) = up(i+1,j,k) - 0.25_field_r * rhobh(k)/rhobf(k) * Cm_zwall * ( u0(i,j,k) + u0(i+1,j,k) ) * uspeed * dzfi(k)
         vp(i,j  ,k) = vp(i,j  ,k) - 0.25_field_r * rhobh(k)/rhobf(k) * Cm_zwall * ( v0(i,j,k) + v0(i,j+1,k) ) * uspeed * dzfi(k)
         vp(i,j+1,k) = vp(i,j+1,k) - 0.25_field_r * rhobh(k)/rhobf(k) * Cm_zwall * ( v0(i,j,k) + v0(i,j+1,k) ) * uspeed * dzfi(k)
 
-        ! tentative fix for vertical diffusion of temperature over z-walls. Also here, 0.5 comes from interpolation of ekh.
-        thlp(i,j,k) = thlp(i,j,k) + 0.5_field_r * rhobh(k)/rhobf(k) * ( ( ( dzf(k-1) * ekh(i,j,k) ) + ( dzf(k ) * ekh(i,j,k-1)) )* dzhi(k)  ) * ( thl0(i,j,k) - thl0(i,j,k-1) ) * dzhi(k) * dzfi(k)
-        qtp (i,j,k) = qtp (i,j,k) + 0.5_field_r * rhobh(k)/rhobf(k) * ( ( ( dzf(k-1) * ekh(i,j,k) ) + ( dzf(k ) * ekh(i,j,k-1)) )* dzhi(k)  ) * ( qt0 (i,j,k) - qt0 (i,j,k-1) ) * dzhi(k) * dzfi(k)
-
+        ! Correct vertical diffusion of temperature over z-walls. Also here, 0.5 comes from interpolation of ekh.
         ! zero/constant flux of heat/moisture currently not implemented. Implies roof temperatures become diagnostic (requiring energy balance)
-        ! doubting whether rhobh(k)/rhobf(k) are truly correct here, i.e., at right positions..
-        thlp(i,j,k) = thlp(i,j,k) - rhobh(k)/rhobf(k) * Cd_zwall * ( thl0(i,j,k) - thlroof ) * uspeed * dzfi(k)
-        qtp (i,j,k) = qtp (i,j,k) - rhobh(k)/rhobf(k) * Cd_zwall * (  qt0(i,j,k) - qtroof  ) * uspeed * dzfi(k)
-        ! no flux of e12 from wall into flow
+        if( .not. lneutral) then
+          thlp(i,j,k) = thlp(i,j,k) + 0.5_field_r * rhobh(k)/rhobf(k) * ( ( ( dzf(k-1) * ekh(i,j,k) ) + ( dzf(k ) * ekh(i,j,k-1)) )* dzhi(k)  ) * ( thl0(i,j,k) - thl0(i,j,k-1) ) * dzhi(k) * dzfi(k)
+          thlp(i,j,k) = thlp(i,j,k) - rhobh(k)/rhobf(k) * Cd_zwall * ( thl0(i,j,k) - thlroof ) * uspeed * dzfi(k)
+        end if
+    
+        ! Correct vertical diffusion of moisture over z-walls. Also here, 0.5 comes from interpolation of ekh.
+        if( lmoist ) then
+          qtp (i,j,k) = qtp (i,j,k) + 0.5_field_r * rhobh(k)/rhobf(k) * ( ( ( dzf(k-1) * ekh(i,j,k) ) + ( dzf(k ) * ekh(i,j,k-1)) )* dzhi(k)  ) * ( qt0 (i,j,k) - qt0 (i,j,k-1) ) * dzhi(k) * dzfi(k)
+          qtp (i,j,k) = qtp (i,j,k) - rhobh(k)/rhobf(k) * Cd_zwall * (  qt0(i,j,k) - qtroof  ) * uspeed * dzfi(k)
+        end if
 
-        ! currently only for zero flux of scalars from walls (i.e., no emission at walls). To be extended later
+        ! Correct vertical diffusion of e12 over z-walls, no flux from e12 into flow but altered production/destructions terms in sgs tke budget
+        if( .not. lsmagorinsky) then
+          tdef2_wrong = 0.25_field_r * ( &
+                        ! du/dz is not compliant with MOST, from term (du/dz+dw/dx)^2
+                        ((w0(i  ,j  ,k+1)-w0(i-1,j  ,k+1))*dxi + &
+                          (u0(i  ,j  ,k+1)-u0(i  ,j  ,k  ))*dzhi(k+1) )**2.0_field_r + &
+                        ((w0(i  ,j  ,k  )-w0(i-1,j  ,k  ))*dxi + &
+                          (u0(i  ,j  ,k  )-u0(i  ,j  ,k-1))*dzhi(k  ) )**2.0_field_r + &
+                        ((w0(i+1,j  ,k  )-w0(i  ,j  ,k  ))*dxi + &
+                          (u0(i+1,j  ,k  )-u0(i+1,j  ,k-1))*dzhi(k  ) )**2.0_field_r + &
+                        ((w0(i+1,j  ,k+1)-w0(i  ,j  ,k+1))*dxi + &
+                          (u0(i+1,j  ,k+1)-u0(i+1,j  ,k  ))*dzhi(k+1) )**2.0_field_r + &
+                        ! dv/dz is not compliant with MOST from term (dv/dz+dw/dy)^2
+                        ((v0(i  ,j  ,k+1)-v0(i  ,j  ,k  ))*dzhi(k+1) + &
+                          (w0(i  ,j  ,k+1)-w0(i  ,j-1,k+1))*dyi )**2.0_field_r  + &
+                        ((v0(i  ,j  ,k  )-v0(i  ,j  ,k-1))*dzhi(k)   + &
+                          (w0(i  ,j  ,k  )-w0(i  ,j-1,k  ))*dyi )**2.0_field_r  + &
+                        ((v0(i  ,j+1,k  )-v0(i  ,j+1,k-1))*dzhi(k)   + &
+                          (w0(i  ,j+1,k  )-w0(i  ,j  ,k  ))*dyi )**2.0_field_r  + &
+                        ((v0(i  ,j+1,k+1)-v0(i  ,j+1,k  ))*dzhi(k+1) + &
+                          (w0(i  ,j+1,k+1)-w0(i  ,j  ,k+1))*dyi )**2.0_field_r )
+
+          if ( lneutral ) then
+            dudz_most = sqrt(Cm_zwall) * ucc / (fkar * z_MO) ! ustar = sqrt(Cd)*uspeed; then project on x-direction via ustar * u/uspeed
+            dvdz_most = sqrt(Cm_zwall) * vcc / (fkar * z_MO)
+          else
+            dudz_most = sqrt(Cm_zwall) * ucc * phim(z_MO / Lob) / (fkar * z_MO) ! ustar = sqrt(Cd)*uspeed; then project on x-direction via ustar * u/uspeed
+            dvdz_most = sqrt(Cm_zwall) * vcc * phim(z_MO / Lob) / (fkar * z_MO)
+            dtdz_most = rhobh(k)/rhobf(k) * Cd_zwall * ( thl0(i,j,k) - thlroof ) * phih(z_MO / Lob) / (sqrt(Cm_zwall) * fkar * z_MO)
+          end if
+
+          tdef2_corr  = ( 0.25_field_r*(w0(i+1,j,k+1)-w0(i-1,j,k+1))*dxi + dudz_most )**2.0_field_r + &
+                        ( 0.25_field_r*(w0(i,j+1,k+1)-w0(i,j-1,k+1))*dyi + dvdz_most )**2.0_field_r
+
+          e12p(i,j,k) = e12p(i,j,k) + rhobh(k)/rhobf(k) * ( ( ( dzf(k-1) * ekh(i,j,k) ) + ( dzf(k ) * ekh(i,j,k-1)) )* dzhi(k)  ) * ( e120(i,j,k) - e120(i,j,k-1) ) * dzhi(k) * dzfi(k)              
+          e12p(i,j,k) = e12p(i,j,k) + ( ekm(i,j,k) / (2*e120(i,j,k)) ) * ( tdef2_corr - tdef2_wrong )
+          if (.not. lneutral) e12p(i,j,k) = e12p(i,j,k) - ( ekh(i,j,k) * grav / (2*e120(i,j,k)*thvf(k)) ) * ( dtdz_most  - dthvdz(i,j,k) )
+        end if
+
+        !! TODO: correction for zlt(i,j,k); difficult to implement, needed as IBM changes ekm/ekh as well...
+        !! related to following term(s):  - (ce1 + ce2*zlt(i,j,k)*deltai(k)) * e120(i,j,k)**2 /(2.*zlt(i,j,k)) !  sbdiss
+        !!                                ekm = c * zlt * e120                      
+
+        ! Currently only zero flux of scalars from walls (i.e., no emission at walls). To be extended later...
         do nc=1,nsv
           svp(i,j,k,nc) = svp(i,j,k,nc) - 0 !rhobh(k)/rhobf(k) * Cd_zwall * ( sv0(i,j,k,nc) -svroof(nc) ) * uspeed * dzfi(k) !< currently set to zero
         end do
@@ -679,6 +722,7 @@ contains
       end do
     end do
 
+    ! Correct tendencies for walls in positive x-direction
     do color_index = 1,2
       !$acc parallel loop gang vector default(present)
       !$omp target teams loop defaultmap(present:aggregate)&
@@ -731,28 +775,67 @@ contains
 
         wp(i,j,k+1) = wp(i,j,k+1) + 0.5_field_r * emop * ( (w0(i,j,k+1) - w0(i-1,j,k+1) ) / dx ) / dx - 0.5_field_r * tau_wu_plus / dx
 
-        ! Enforcing zero flux by correction of tendencies of temperature, moisture and other scalars (by negating diffusion term)
-
+        ! Remove wrong diffusion of temperature, moisture and other scalars, and replace with consistent wall flux
         ! scalars at (i,j,k) are "to the right" of the x-walls, so correct on s(i,j,k)
         ! "+" because we reflect it back, and 0.5_field_r comes from interpolation of ekh
-        thlp(i,j,k) = thlp(i,j,k) + 0.5_field_r * ( ekh(i,j,k) + ekh(i-1,j,k) ) * ( thl0(i,j,k) - thl0(i-1,j,k) ) * dx2i
-        qtp(i,j,k)  =  qtp(i,j,k) + 0.5_field_r * ( ekh(i,j,k) + ekh(i-1,j,k) ) * (  qt0(i,j,k) -  qt0(i-1,j,k) ) * dx2i
+        uspeed = 0.5_field_r * ( ( v0(i,j,k) + v0(i,j+1,k) )**2 + ( w0(i,j,k) + w0(i,j,k+1) )**2 )**0.5_field_r
+
+        if ( .not. lneutral ) then
+          thlp(i,j,k) = thlp(i,j,k) + 0.5_field_r * ( ekh(i,j,k) + ekh(i-1,j,k) ) * ( thl0(i,j,k) - thl0(i-1,j,k) ) * dx2i
+          thlp(i,j,k) = thlp(i,j,k) + Cd_xwall * uspeed * (thlwall - thl0(i,j,k)) / dx
+        end if
+
+        if ( lmoist ) then
+          qtp (i,j,k) =  qtp(i,j,k) + 0.5_field_r * ( ekh(i,j,k) + ekh(i-1,j,k) ) * (  qt0(i,j,k) -  qt0(i-1,j,k) ) * dx2i
+          qtp (i,j,k) = qtp (i,j,k) + Cd_xwall * uspeed * ( qtwall -  qt0(i,j,k)) / dx
+        end if
+
+        ! Correction and interpolation only valid for k/=1 (assume surface level is MOST dominated, w(i,j,k) is small)
+        if ( .not. lsmagorinsky ) then
+          if ( k /= 1 ) then
+            tdef2_wrong = 0.25_field_r * ( &
+                          ! dw/dx is not compliant with logarithmic law-of-wall, from term (du/dz+dw/dx)^2
+                          ((w0(i  ,j  ,k+1)-w0(i-1,j  ,k+1))*dxi + &
+                            (u0(i  ,j  ,k+1)-u0(i  ,j  ,k  ))*dzhi(k+1) )**2.0_field_r + &
+                          ((w0(i  ,j  ,k  )-w0(i-1,j  ,k  ))*dxi + &
+                            (u0(i  ,j  ,k  )-u0(i  ,j  ,k-1))*dzhi(k  ) )**2.0_field_r + &
+                          ((w0(i+1,j  ,k  )-w0(i  ,j  ,k  ))*dxi + &
+                            (u0(i+1,j  ,k  )-u0(i+1,j  ,k-1))*dzhi(k  ) )**2.0_field_r + &
+                          ((w0(i+1,j  ,k+1)-w0(i  ,j  ,k+1))*dxi + &
+                            (u0(i+1,j  ,k+1)-u0(i+1,j  ,k  ))*dzhi(k+1) )**2.0_field_r + &
+                          ! dv/dx is not compliant with logarithmic law-of-wall, from term (du/dy + dv/dx)^2 
+                          ((u0(i  ,j+1,k  )-u0(i  ,j  ,k  ))*dyi + &
+                            (v0(i  ,j+1,k  )-v0(i-1,j+1,k  ))*dxi )**2.0_field_r + &
+                          ((u0(i  ,j  ,k  )-u0(i  ,j-1,k  ))*dyi + &
+                            (v0(i  ,j  ,k  )-v0(i-1,j  ,k  ))*dxi )**2.0_field_r + &
+                          ((u0(i+1,j  ,k  )-u0(i+1,j-1,k  ))*dyi + &
+                            (v0(i+1,j  ,k  )-v0(i  ,j  ,k  ))*dxi )**2.0_field_r + &
+                          ((u0(i+1,j+1,k  )-u0(i+1,j  ,k  ))*dyi + &
+                            (v0(i+1,j+1,k  )-v0(i  ,j+1,k  ))*dxi )**2.0_field_r )
+            
+            dwdx_log = sqrt(Cm_xwall) * 0.5_real64 * (w0(i,j,k) + w0(i,j,k+1)) / (fkar * dx_half) ! Similar to MOST correction but with phi = 1
+            dvdx_log = sqrt(Cm_xwall) * 0.5_real64 * (v0(i,j,k) + v0(i,j+1,k)) / (fkar * dx_half)
+
+            tdef2_corr  = (  0.5_field_r*((u0(i+1,j,k+1)-u0(i+1,j,k))*dzhi(k+1) + (u0(i+1,j,k)-u0(i+1,j,k-1))*dzhi(k)) + dwdx_log )**2.0_field_r + &
+                          ( 0.25_field_r*(u0(i+1,j+1,k)-u0(i+1,j-1,k))*dyi + dvdx_log )**2.0_field_r 
+            ! SvdL, for now concave x-surface corners are neglected
+            !   tdef2_corr  = ( dudz_most + dwdx_log )**2.0_field_r + &
+            !                 ( 0.25_field_r*(u0(i+1,j+1,k)-u0(i+1,j-1,k))*dyi + dvdx_log )**2.0_field_r 
+          
+            e12p(i,j,k) = e12p(i,j,k) + ( ekh(i,j,k) + ekh(i-1,j,k) ) * ( e120(i,j,k) - e120(i-1,j,k) ) * dx2i
+            e12p(i,j,k) = e12p(i,j,k) + ( ekm(i,j,k) / (2*e120(i,j,k)) ) * ( tdef2_corr - tdef2_wrong )
+          end if
+        end if
 
         do nc=1,nsv
           svp(i,j,k,nc) = svp(i,j,k,nc) + 0.5_field_r * ( ekh(i,j,k) + ekh(i-1,j,k) ) * ( sv0(i,j,k,nc) - sv0(i-1,j,k,nc) ) * dx2i
         end do
-        !call xwalle12(i,j,k) ! correction is ignored assuming u,v,w,subgrid TKE are near zero inside buildings
-
-        ! Finally, set correct heat flux from wall to fluid
-        uspeed = 0.5_field_r * ( ( v0(i,j,k) + v0(i,j+1,k) )**2 + ( w0(i,j,k) + w0(i,j,k+1) )**2 )**0.5_field_r
-        thlp(i,j,k) = thlp(i,j,k) + Cd_xwall * uspeed * (thlwall - thl0(i,j,k)) / dx
-        qtp (i,j,k) = qtp (i,j,k) + Cd_xwall * uspeed * ( qtwall -  qt0(i,j,k)) / dx
 
       end do
     end do
 
+    ! Correct tendencies for walls in negative x-direction
     do color_index = 1,2
-      ! Correct tendencies for walls in negative x-direction
       !$acc parallel loop gang vector default(present)
       !$omp target teams loop defaultmap(present:aggregate)&
       !$omp defaultmap(present:allocatable)
@@ -801,27 +884,69 @@ contains
         
         wp(i,j,k+1) = wp(i,j,k+1) - 0.5_field_r * emop * ( (w0(i+1,j,k+1) - w0(i,j,k+1) ) / dx ) / dx - 0.5_field_r * tau_wu_min / dx
 
-        ! Enforcing zero flux by correction of tendencies of temperature, moisture and other scalars (by negating diffusion term)
-
+        ! Remove wrong diffusion of temperature, moisture and other scalars, and replace with consistent wall flux
         ! scalars at (i+1,j,k) are "to the right" of the x-walls, so correct on s(i,j,k) which is on the left for minus x-walls
         ! "-" because we reflect it back, and 0.5_field_r comes from interpolation of ekh
-        thlp(i,j,k) = thlp(i,j,k) - 0.5_field_r * ( ekh(i+1,j,k) + ekh(i,j,k) ) * ( thl0(i+1,j,k) - thl0(i,j,k) ) * dx2i
-        qtp (i,j,k) = qtp (i,j,k) - 0.5_field_r * ( ekh(i+1,j,k) + ekh(i,j,k) ) * (  qt0(i+1,j,k) -  qt0(i,j,k) ) * dx2i
+        uspeed = 0.5_field_r * ( ( v0(i,j,k) + v0(i,j+1,k) )**2 + ( w0(i,j,k) + w0(i,j,k+1) )**2 )**0.5_field_r
+
+        if ( .not. lneutral ) then
+          thlp(i,j,k) = thlp(i,j,k) - 0.5_field_r * ( ekh(i+1,j,k) + ekh(i,j,k) ) * ( thl0(i+1,j,k) - thl0(i,j,k) ) * dx2i
+          thlp(i,j,k) = thlp(i,j,k) + Cd_xwall * uspeed * (thlwall - thl0(i,j,k)) / dx
+        end if
+        
+        if ( lmoist ) then
+          qtp (i,j,k) = qtp (i,j,k) - 0.5_field_r * ( ekh(i+1,j,k) + ekh(i,j,k) ) * (  qt0(i+1,j,k) -  qt0(i,j,k) ) * dx2i
+          qtp (i,j,k) = qtp (i,j,k) + Cd_xwall * uspeed * ( qtwall -  qt0(i,j,k)) / dx ! check this one..
+        end if
+
+        ! Correction and interpolation only valid for k/=1 (assume surface level is MOST dominated, w(i,j,k) is small)
+        if ( .not. lsmagorinsky ) then
+          if ( k /= 1 ) then
+            tdef2_wrong = 0.25_field_r * ( &
+                          ! dw/dx is not compliant with logarithmic law-of-wall, from term (du/dz+dw/dx)^2
+                          ((w0(i  ,j  ,k+1)-w0(i-1,j  ,k+1))*dxi + &
+                            (u0(i  ,j  ,k+1)-u0(i  ,j  ,k  ))*dzhi(k+1) )**2.0_field_r + &
+                          ((w0(i  ,j  ,k  )-w0(i-1,j  ,k  ))*dxi + &
+                            (u0(i  ,j  ,k  )-u0(i  ,j  ,k-1))*dzhi(k  ) )**2.0_field_r + &
+                          ((w0(i+1,j  ,k  )-w0(i  ,j  ,k  ))*dxi + &
+                            (u0(i+1,j  ,k  )-u0(i+1,j  ,k-1))*dzhi(k  ) )**2.0_field_r + &
+                          ((w0(i+1,j  ,k+1)-w0(i  ,j  ,k+1))*dxi + &
+                            (u0(i+1,j  ,k+1)-u0(i+1,j  ,k  ))*dzhi(k+1) )**2.0_field_r + &
+                          ! dv/dx is not compliant with logarithmic law-of-wall, from term (du/dy + dv/dx)^2 
+                          ((u0(i  ,j+1,k  )-u0(i  ,j  ,k  ))*dyi + &
+                            (v0(i  ,j+1,k  )-v0(i-1,j+1,k  ))*dxi )**2.0_field_r + &
+                          ((u0(i  ,j  ,k  )-u0(i  ,j-1,k  ))*dyi + &
+                            (v0(i  ,j  ,k  )-v0(i-1,j  ,k  ))*dxi )**2.0_field_r + &
+                          ((u0(i+1,j  ,k  )-u0(i+1,j-1,k  ))*dyi + &
+                            (v0(i+1,j  ,k  )-v0(i  ,j  ,k  ))*dxi )**2.0_field_r + &
+                          ((u0(i+1,j+1,k  )-u0(i+1,j  ,k  ))*dyi + &
+                            (v0(i+1,j+1,k  )-v0(i  ,j+1,k  ))*dxi )**2.0_field_r )
+            
+            ! Should have minus signs due to direction of evaluation
+            dwdx_log = - sqrt(Cm_xwall) * 0.5_real64 * (w0(i,j,k) + w0(i,j,k+1)) / (fkar * dx_half) ! Similar to MOST correction but with phi = 1
+            dvdx_log = - sqrt(Cm_xwall) * 0.5_real64 * (v0(i,j,k) + v0(i,j+1,k)) / (fkar * dx_half)
+
+            ! For negative pointing walls, reduce index i by one instead of adding one
+            tdef2_corr  = (  0.5_field_r*((u0(i-1,j,k+1)-u0(i-1,j,k))*dzhi(k+1) + (u0(i-1,j,k)-u0(i-1,j,k-1))*dzhi(k)) + dwdx_log )**2.0_field_r + &
+                          ( 0.25_field_r*(u0(i-1,j+1,k)-u0(i-1,j-1,k))*dyi + dvdx_log )**2.0_field_r 
+            ! SvdL, for now concave x-surface corners are neglected
+            !   tdef2_corr  = ( dudz_most + dwdx_log )**2.0_field_r + &
+            !                 ( 0.25_field_r*(u0(i+1,j+1,k)-u0(i+1,j-1,k))*dyi + dvdx_log )**2.0_field_r 
+            
+            e12p(i,j,k) = e12p(i,j,k) - ( ekh(i+1,j,k) + ekh(i,j,k) ) * ( e120(i+1,j,k) - e120(i,j,k) ) * dx2i
+            e12p(i,j,k) = e12p(i,j,k) + ( ekm(i,j,k) / (2*e120(i,j,k)) ) * ( tdef2_corr - tdef2_wrong )
+          end if
+        end if        
 
         do nc=1,nsv
           svp(i,j,k,nc) = svp(i,j,k,nc) - 0.5_field_r * ( ekh(i+1,j,k) + ekh(i,j,k) ) * ( sv0(i+1,j,k,nc) - sv0(i,j,k,nc) ) * dx2i
         end do
 
-        ! Finally, set correct heat flux from wall to fluid
-        uspeed = 0.5_field_r * ( ( v0(i,j,k) + v0(i,j+1,k) )**2 + ( w0(i,j,k) + w0(i,j,k+1) )**2 )**0.5_field_r
-        thlp(i,j,k) = thlp(i,j,k) + Cd_xwall * uspeed * (thlwall - thl0(i,j,k)) / dx
-        qtp (i,j,k) = qtp (i,j,k) + Cd_xwall * uspeed * ( qtwall -  qt0(i,j,k)) / dx ! check this one..
-
       end do
     end do
 
+    ! Correct tendencies for walls in positive y-direction
     do color_index = 1,2
-      ! Correct tendencies for walls in positive y-direction
       !$acc parallel loop gang vector default(present)
       !$omp target teams loop defaultmap(present:aggregate)&
       !$omp defaultmap(present:allocatable)
@@ -869,28 +994,68 @@ contains
         
         wp(i,j,k+1) = wp(i,j,k+1) + 0.5_field_r * emop * ( (w0(i,j,k+1) - w0(i,j-1,k+1) ) / dy ) / dy - 0.5_field_r * tau_wv_plus / dy
 
-        ! Enforcing zero flux by correction of tendencies of temperature, moisture and other scalars (by negating diffusion term)
-
+        ! Remove wrong diffusion of temperature, moisture and other scalars, and replace with consistent wall flux
         ! scalars at (i,j,k) are "to the right" of the y-walls, so correct on s(i,j,k)
         ! "+" because we reflect it back, and 0.5_field_r comes from interpolation of ekh
-        thlp(i,j,k) = thlp(i,j,k) + 0.5_field_r * ( ekh(i,j,k) + ekh(i,j-1,k) ) * ( thl0(i,j,k) - thl0(i,j-1,k) ) * dy2i
-        qtp(i,j,k)  =  qtp(i,j,k) + 0.5_field_r * ( ekh(i,j,k) + ekh(i,j-1,k) ) * (  qt0(i,j,k) -  qt0(i,j-1,k) ) * dy2i
+        uspeed = 0.5_field_r * ( ( u0(i,j,k) + u0(i+1,j,k) )**2 + ( w0(i,j,k) + w0(i,j,k+1) )**2 )**0.5_field_r
+
+        if ( .not. lneutral ) then
+          thlp(i,j,k) = thlp(i,j,k) + 0.5_field_r * ( ekh(i,j,k) + ekh(i,j-1,k) ) * ( thl0(i,j,k) - thl0(i,j-1,k) ) * dy2i
+          thlp(i,j,k) = thlp(i,j,k) + Cd_ywall * uspeed * (thlwall - thl0(i,j,k)) / dy
+        end if
+
+        if ( lmoist ) then
+          qtp(i,j,k)  =  qtp(i,j,k) + 0.5_field_r * ( ekh(i,j,k) + ekh(i,j-1,k) ) * (  qt0(i,j,k) -  qt0(i,j-1,k) ) * dy2i
+          qtp (i,j,k) = qtp (i,j,k) + Cd_ywall * uspeed * ( qtwall -  qt0(i,j,k)) / dy ! check this one..
+        end if
+        
+        ! Correction and interpolation only valid for k/=1 (assume surface level is MOST dominated, w(i,j,k) is small)
+        if ( .not. lsmagorinsky ) then
+          if ( k /= 1 ) then
+            tdef2_wrong = 0.25_field_r * ( &
+                          ! du/dy is not compliant with logarithmic law-of-wall, from term (du/dy+dv/dx)^2
+                          ((u0(i  ,j+1,k  )-u0(i  ,j  ,k  ))*dyi + &
+                            (v0(i  ,j+1,k  )-v0(i-1,j+1,k  ))*dxi )**2.0_field_r + &
+                          ((u0(i  ,j  ,k  )-u0(i  ,j-1,k  ))*dyi + &
+                            (v0(i  ,j  ,k  )-v0(i-1,j  ,k  ))*dxi )**2.0_field_r + &
+                          ((u0(i+1,j  ,k  )-u0(i+1,j-1,k  ))*dyi + &
+                            (v0(i+1,j  ,k  )-v0(i  ,j  ,k  ))*dxi )**2.0_field_r + &
+                          ((u0(i+1,j+1,k  )-u0(i+1,j  ,k  ))*dyi + &
+                            (v0(i+1,j+1,k  )-v0(i  ,j+1,k  ))*dxi )**2.0_field_r + &
+                          ! dw/dy is not compliant with logarithmic law-of-wall, from term (dv/dz+dw/dy)^2 
+                          ((v0(i  ,j  ,k+1)-v0(i  ,j  ,k  ))*dzhi(k+1) + &
+                            (w0(i  ,j  ,k+1)-w0(i  ,j-1,k+1))*dyi )**2.0_field_r  + &
+                          ((v0(i  ,j  ,k  )-v0(i  ,j  ,k-1))*dzhi(k)   + &
+                            (w0(i  ,j  ,k  )-w0(i  ,j-1,k  ))*dyi )**2.0_field_r  + &
+                          ((v0(i  ,j+1,k  )-v0(i  ,j+1,k-1))*dzhi(k)   + &
+                            (w0(i  ,j+1,k  )-w0(i  ,j  ,k  ))*dyi )**2.0_field_r  + &
+                          ((v0(i  ,j+1,k+1)-v0(i  ,j+1,k  ))*dzhi(k+1) + &
+                            (w0(i  ,j+1,k+1)-w0(i  ,j  ,k+1))*dyi )**2.0_field_r )
+            
+            dudy_log = sqrt(Cm_ywall) * 0.5_real64 * (u0(i,j,k) + u0(i+1,j,k)) / (fkar * dy_half) ! Similar to MOST correction but with phi = 1
+            dwdy_log = sqrt(Cm_ywall) * 0.5_real64 * (w0(i,j,k) + w0(i,j,k+1)) / (fkar * dy_half)
+
+            tdef2_corr  = ( 0.25_field_r*(v0(i+1,j+1,k)-v0(i-1,j+1,k))*dxi  + dudy_log )**2.0_field_r + &
+                          (  0.5_field_r*((v0(i,j+1,k+1)-v0(i,j+1,k))*dzhi(k+1) + (v0(i,j+1,k)-v0(i,j+1,k-1))*dzhi(k)) + dwdy_log )**2.0_field_r
+                          
+            ! SvdL, for now concave x-surface corners are neglected
+            !   tdef2_corr  = ( dudz_most + dwdx_log )**2.0_field_r + &
+            !                 ( 0.25_field_r*(u0(i+1,j+1,k)-u0(i+1,j-1,k))*dyi + dvdx_log )**2.0_field_r
+
+            e12p(i,j,k) = e12p(i,j,k) + ( ekh(i,j,k) + ekh(i,j-1,k) ) * ( e120(i,j,k) - e120(i,j-1,k) ) * dy2i    
+            e12p(i,j,k) = e12p(i,j,k) + ( ekm(i,j,k) / (2*e120(i,j,k)) ) * ( tdef2_corr - tdef2_wrong )
+          end if
+        end if
 
         do nc=1,nsv
           svp(i,j,k,nc) = svp(i,j,k,nc) + 0.5_field_r * ( ekh(i,j,k) + ekh(i,j-1,k) ) * ( sv0(i,j,k,nc) - sv0(i,j-1,k,nc) ) * dy2i
         end do
-        !call xwalle12(i,j,k) ! correction is ignored assuming u,v,w,subgrid TKE are near zero inside buildings
-
-        ! Finally, set correct heat flux from wall to fluid
-        uspeed = 0.5_field_r * ( ( u0(i,j,k) + u0(i+1,j,k) )**2 + ( w0(i,j,k) + w0(i,j,k+1) )**2 )**0.5_field_r
-        thlp(i,j,k) = thlp(i,j,k) + Cd_ywall * uspeed * (thlwall - thl0(i,j,k)) / dy
-        qtp (i,j,k) = qtp (i,j,k) + Cd_ywall * uspeed * ( qtwall -  qt0(i,j,k)) / dy ! check this one..
 
       end do
     end do
 
+    ! Correct tendencies for walls in negative y-direction
     do color_index = 1,2
-      ! Correct tendencies for walls in negative y-direction
       !$acc parallel loop gang vector default(present)
       !$omp target teams loop defaultmap(present:aggregate)&
       !$omp defaultmap(present:allocatable)
@@ -939,21 +1104,65 @@ contains
         
         wp(i,j,k+1) = wp(i,j,k+1) - 0.5_field_r * emop * ( (w0(i,j+1,k+1) - w0(i,j,k+1) ) / dy ) / dy - 0.5_field_r * tau_wv_min / dy
 
-        ! Enforcing zero flux by correction of tendencies of temperature, moisture and other scalars (by negating diffusion term)
-
+        ! Remove wrong diffusion of temperature, moisture and other scalars, and replace with consistent wall flux
         ! scalars at (i,j,k) are "to the right" of the y-walls, so correct on s(i,j-1,k) which is on the left for minus y-walls
         ! "-" because we reflect it back, and 0.5_field_r comes from interpolation of ekh
-        thlp(i,j,k) = thlp(i,j,k) - 0.5_field_r * ( ekh(i,j+1,k) + ekh(i,j,k) ) * ( thl0(i,j+1,k) - thl0(i,j,k) ) * dy2i
-        qtp(i,j,k)  =  qtp(i,j,k) - 0.5_field_r * ( ekh(i,j+1,k) + ekh(i,j,k) ) * (  qt0(i,j+1,k) -  qt0(i,j,k) ) * dy2i
+        uspeed = 0.5_field_r * ( ( u0(i,j,k) + u0(i+1,j,k) )**2 + ( w0(i,j,k) + w0(i,j,k+1) )**2 )**0.5_field_r
+
+        if ( .not. lneutral ) then
+          thlp(i,j,k) = thlp(i,j,k) - 0.5_field_r * ( ekh(i,j+1,k) + ekh(i,j,k) ) * ( thl0(i,j+1,k) - thl0(i,j,k) ) * dy2i
+          thlp(i,j,k) = thlp(i,j,k) + Cd_ywall * uspeed * (thlwall - thl0(i,j,k)) / dy
+        end if
+        
+        if ( lmoist ) then
+          qtp (i,j,k) = qtp (i,j,k) - 0.5_field_r * ( ekh(i,j+1,k) + ekh(i,j,k) ) * (  qt0(i,j+1,k) -  qt0(i,j,k) ) * dy2i
+          qtp (i,j,k) = qtp (i,j,k) + Cd_ywall * uspeed * ( qtwall -  qt0(i,j,k)) / dy ! check this one..
+        end if
+        
+        ! Correction and interpolation only valid for k/=1 (assume surface level is MOST dominated, w(i,j,k) is small)
+        if ( .not. lsmagorinsky ) then
+          if ( k /= 1 ) then
+            tdef2_wrong = 0.25_field_r * ( &
+                          ! du/dy is not compliant with logarithmic law-of-wall, from term (du/dy+dv/dx)^2
+                          ((u0(i  ,j+1,k  )-u0(i  ,j  ,k  ))*dyi + &
+                            (v0(i  ,j+1,k  )-v0(i-1,j+1,k  ))*dxi )**2.0_field_r + &
+                          ((u0(i  ,j  ,k  )-u0(i  ,j-1,k  ))*dyi + &
+                            (v0(i  ,j  ,k  )-v0(i-1,j  ,k  ))*dxi )**2.0_field_r + &
+                          ((u0(i+1,j  ,k  )-u0(i+1,j-1,k  ))*dyi + &
+                            (v0(i+1,j  ,k  )-v0(i  ,j  ,k  ))*dxi )**2.0_field_r + &
+                          ((u0(i+1,j+1,k  )-u0(i+1,j  ,k  ))*dyi + &
+                            (v0(i+1,j+1,k  )-v0(i  ,j+1,k  ))*dxi )**2.0_field_r + &
+                          ! dw/dy is not compliant with logarithmic law-of-wall, from term (dv/dz+dw/dy)^2 
+                          ((v0(i  ,j  ,k+1)-v0(i  ,j  ,k  ))*dzhi(k+1) + &
+                            (w0(i  ,j  ,k+1)-w0(i  ,j-1,k+1))*dyi )**2.0_field_r  + &
+                          ((v0(i  ,j  ,k  )-v0(i  ,j  ,k-1))*dzhi(k)   + &
+                            (w0(i  ,j  ,k  )-w0(i  ,j-1,k  ))*dyi )**2.0_field_r  + &
+                          ((v0(i  ,j+1,k  )-v0(i  ,j+1,k-1))*dzhi(k)   + &
+                            (w0(i  ,j+1,k  )-w0(i  ,j  ,k  ))*dyi )**2.0_field_r  + &
+                          ((v0(i  ,j+1,k+1)-v0(i  ,j+1,k  ))*dzhi(k+1) + &
+                            (w0(i  ,j+1,k+1)-w0(i  ,j  ,k+1))*dyi )**2.0_field_r )
+
+            ! Should have minus signs due to direction of evaluation
+            dudy_log = - sqrt(Cm_ywall) * 0.5_real64 * (u0(i,j,k) + u0(i+1,j,k)) / (fkar * dy_half) ! Similar to MOST correction but with phi = 1
+            dwdy_log = - sqrt(Cm_ywall) * 0.5_real64 * (w0(i,j,k) + w0(i,j,k+1)) / (fkar * dy_half)
+
+            ! For negative pointing walls, reduce index j by one instead of adding one
+            tdef2_corr  = ( 0.25_field_r*(v0(i+1,j-1,k)-v0(i-1,j-1,k))*dxi  + dudy_log )**2.0_field_r + &
+                          (  0.5_field_r*((v0(i,j-1,k+1)-v0(i,j-1,k))*dzhi(k+1) + (v0(i,j-1,k)-v0(i,j-1,k-1))*dzhi(k)) + dwdy_log )**2.0_field_r
+                          
+            ! SvdL, for now concave x-surface corners are neglected
+            !   tdef2_corr  = ( dudz_most + dwdx_log )**2.0_field_r + &
+            !                 ( 0.25_field_r*(u0(i+1,j+1,k)-u0(i+1,j-1,k))*dyi + dvdx_log )**2.0_field_r
+
+            e12p(i,j,k) = e12p(i,j,k) - ( ekh(i,j+1,k) + ekh(i,j,k) ) * ( e120(i,j+1,k) - e120(i,j,k) ) * dy2i
+            e12p(i,j,k) = e12p(i,j,k) + ( ekm(i,j,k) / (2*e120(i,j,k)) ) * ( tdef2_corr - tdef2_wrong )
+          end if
+        end if
 
         do nc=1,nsv
           svp(i,j,k,nc) = svp(i,j,k,nc) - 0.5_field_r * ( ekh(i,j+1,k) + ekh(i,j,k) ) * ( sv0(i,j+1,k,nc) - sv0(i,j,k,nc) ) * dy2i
         end do
 
-        !> Finally, set correct heat flux from wall to fluid
-        uspeed = 0.5_field_r * ( ( u0(i,j,k) + u0(i+1,j,k) )**2 + ( w0(i,j,k) + w0(i,j,k+1) )**2 )**0.5_field_r
-        thlp(i,j,k) = thlp(i,j,k) + Cd_ywall * uspeed * (thlwall - thl0(i,j,k)) / dy
-        qtp (i,j,k) = qtp (i,j,k) + Cd_ywall * uspeed * ( qtwall -  qt0(i,j,k)) / dy ! check this one..
       end do
     end do
 
@@ -1012,198 +1221,15 @@ contains
 
   !> Calculate drag using logarithmic law-of-wall.
   function log_wallaw(u1,u2,Cm_hor_wall) result(tau)
-!$omp declare target
-
+    !$omp declare target
     !$acc routine seq
-    real(field_r), intent(in) :: u1,u2,Cm_hor_wall
+
+    real(field_r),intent(in) :: u1,u2,Cm_hor_wall
 
     real(field_r)             :: tau
 
     tau  = Cm_hor_wall * sqrt(u1**2 + u2**2) * u1   ! minus sign included in subroutine above, where it checks direction of the wind
                                                     
   end function log_wallaw
-
-  ! TODO: wall corection for e12 currenly neglected. To be tested in detail later.
-  ! This allows for diffusive flux of e12 over the walls, while e12 and ekm/ekh should be insignificant inside buildings. Just outside ekm is probably too large to accurately determine such flux at all -> so we should consider proper cancellation.
-
-  ! subroutine xwalle12(i,j,k)
-
-  !   use modglobal,      only : dx2i, dx, dy, dzh
-  !   use modsubgriddata, only : ekm
-  !   use modfields,      only : e12p, e120, u0, v0, w0
-
-  !   implicit none
-
-  !   integer, intent(in)    :: i,j,k
-
-  !   if(.not.(k==1)) then
-  !     if(.not. (e12p(i,j,k)==0)) then
-  !       e12p(i,j,k)   = e12p(i,j,k)   - (ekm(i,j,k)+ekm(i-1,j,k))*(e120(i,j,k)-e120(i-1,j,k))*dx2i &
-  !                                 + ekm(i,j,k)/(2*e120(i,j,k))* (&  !source terms
-  !                                    -((w0(i,j,k+1)-w0(i-1,j,k+1))  / dx             + &
-  !                                      (u0(i,j,k+1)-u0(i,j,k))      / dzh(k+1) )**2  + &
-  !                                    +(2.*(w0(i,j,k+1))             / dx             + &
-  !                                      (u0(i,j,k+1)-u0(i,j,k))      / dzh(k+1) )**2  + &
-
-  !                                    -((w0(i,j,k)-w0(i-1,j,k))      / dx             + &
-  !                                      (u0(i,j,k)-u0(i,j,k-1))      / dzh(k)   )**2  + &
-  !                                    +(2.*(w0(i,j,k))               / dx             + &
-  !                                      (u0(i,j,k)-u0(i,j,k-1))      / dzh(k)   )**2  + &
-
-  !                                    -((u0(i,j+1,k)-u0(i,j,k))      / dy             + &
-  !                                      (v0(i,j+1,k)-v0(i-1,j+1,k))  / dx       )**2  + &
-  !                                    +((u0(i,j+1,k)-u0(i,j,k))      / dy             + &
-  !                                      (2.*v0(i,j+1,k))             / dx       )**2  + &
-
-  !                                    -((u0(i,j,k)-u0(i,j-1,k))      / dy             + &
-  !                                      (v0(i,j,k)-v0(i-1,j,k))      / dx       )**2  + &
-  !                                    +((u0(i,j,k)-u0(i,j-1,k))      / dy             + &
-  !                                      (2.*v0(i,j,k))               / dx       )**2    &
-  !                                   )
-  !     elseif(.not. (e12p(i-1,j,k)==0)) then
-  !       e12p(i-1,j,k) = e12p(i-1,j,k) + (ekm(i,j,k)+ekm(i-1,j,k))*(e120(i,j,k)-e120(i-1,j,k))*dx2i &
-  !                                 + ekm(i-1,j,k)/(2*e120(i-1,j,k))* (&  !source terms
-  !                                      -((w0(i,j,k)-w0(i-1,j,k))    / dx             + &
-  !                                        (u0(i,j,k)-u0(i,j,k-1))    / dzh(k)   )**2  + &
-  !                                      +((-2.*w0(i-1,j,k))          / dx             + &
-  !                                        (u0(i,j,k)-u0(i,j,k-1))    / dzh(k)   )**2  + &
-
-  !                                      -((w0(i,j,k+1)-w0(i-1,j,k+1))/ dx             + &
-  !                                        (u0(i,j,k+1)-u0(i,j,k))    / dzh(k+1) )**2  + &
-  !                                      +((-2.*w0(i-1,j,k+1))        / dx             + &
-  !                                        (u0(i,j,k+1)-u0(i,j,k))    / dzh(k+1) )**2  + &
-
-  !                                      -((u0(i,j,k)-u0(i,j-1,k))    / dy             + &
-  !                                        (v0(i,j,k)-v0(i-1,j,k))    / dx       )**2  + &
-  !                                      +((u0(i,j,k)-u0(i,j-1,k))    / dy             + &
-  !                                        (-2.*v0(i-1,j,k))          / dx       )**2  + &
-
-  !                                      -((u0(i,j+1,k)-u0(i,j,k))    / dy             + &
-  !                                        (v0(i,j+1,k)-v0(i-1,j+1,k))/ dx       )**2  + &
-  !                                      +((u0(i,j+1,k)-u0(i,j,k))    / dy             + &
-  !                                        (-2.*v0(i-1,j+1,k))        / dx       )**2    &
-  !                                   )
-  !   end if
-  !   else !Special treatment for the lowest full level: k=1
-  !     if(.not. (e12p(i,j,k)==0)) then
-  !       e12p(i,j,k)   = e12p(i,j,k)   - (ekm(i,j,k)+ekm(i-1,j,k))*(e120(i,j,k)-e120(i-1,j,k))*dx2i &
-  !                                 + ekm(i,j,k)/(2*e120(i,j,k))* (&  !source terms
-  !                                    -((u0(i,j+1,k)-u0(i,j,k))      / dy             + &
-  !                                      (v0(i,j+1,k)-v0(i-1,j+1,k))  / dx       )**2  + &
-  !                                    +((u0(i,j+1,k)-u0(i,j,k))      / dy             + &
-  !                                      (2.*v0(i,j+1,k))             / dx       )**2  + &
-
-  !                                    -((u0(i,j,k)-u0(i,j-1,k))      / dy             + &
-  !                                      (v0(i,j,k)-v0(i-1,j,k))      / dx       )**2  + &
-  !                                    +((u0(i,j,k)-u0(i,j-1,k))      / dy             + &
-  !                                      (2.*v0(i,j,k))               / dx       )**2    &
-  !                                   )
-  !     elseif(.not. (e12p(i-1,j,k)==0)) then
-  !       e12p(i-1,j,k) = e12p(i-1,j,k) + (ekm(i,j,k)+ekm(i-1,j,k))*(e120(i,j,k)-e120(i-1,j,k))*dx2i &
-  !                                 + ekm(i-1,j,k)/(2*e120(i-1,j,k))* (&  !source terms
-
-  !                                      -((u0(i,j,k)-u0(i,j-1,k))    / dy             + &
-  !                                        (v0(i,j,k)-v0(i-1,j,k))    / dx       )**2  + &
-  !                                      +((u0(i,j,k)-u0(i,j-1,k))    / dy             + &
-  !                                        (-2.*v0(i-1,j,k))          / dx       )**2  + &
-
-  !                                      -((u0(i,j+1,k)-u0(i,j,k))    / dy             + &
-  !                                        (v0(i,j+1,k)-v0(i-1,j+1,k))/ dx       )**2  + &
-  !                                      +((u0(i,j+1,k)-u0(i,j,k))    / dy             + &
-  !                                        (-2.*v0(i-1,j+1,k))        / dx       )**2    &
-  !                                   )
-  !     end if
-  !   end if
-  ! end subroutine xwalle12
-
-  ! subroutine ywalle12(i,j,k)
-
-  !   use modglobal,      only : dy2i, dx, dy, dzh
-  !   use modsubgriddata, only : ekm
-  !   use modfields,      only : e12p, e120, u0, v0, w0
-
-  !   implicit none
-
-  !   integer, intent(in)    :: i,j,k
-
-  !   if(.not.(k==1)) then
-  !     if(.not. (e12p(i,j,k)==0)) then
-  !       e12p(i,j,k)   = e12p(i,j,k)   - (ekm(i,j,k)+ekm(i,j-1,k))*(e120(i,j,k)-e120(i,j-1,k))*dy2i &
-  !                                 + ekm(i,j,k)/(2.*e120(i,j,k))* (&  !source terms
-  !                                      -((u0(i,j,k)-u0(i,j-1,k))    / dy             + &
-  !                                        (v0(i,j,k)-v0(i-1,j,k))    / dx       )**2  + &
-  !                                      +((2.*u0(i,j,k))             / dy             + &
-  !                                        (v0(i,j,k)-v0(i-1,j,k))    / dx       )**2  + &
-
-  !                                      -((u0(i+1,j,k)-u0(i+1,j-1,k))/ dy             + &
-  !                                        (v0(i+1,j,k)-v0(i,j,k))    / dx       )**2  + &
-  !                                      +((2.*u0(i+1,j,k))           / dy             + &
-  !                                        (v0(i+1,j,k)-v0(i,j,k))    / dx       )**2  + &
-
-  !                                      -((v0(i,j,k+1)-v0(i,j,k))    / dzh(k+1)       + &
-  !                                        (w0(i,j,k+1)-w0(i,j-1,k+1))/ dy       )**2  + &
-  !                                      +((v0(i,j,k+1)-v0(i,j,k))    / dzh(k+1)       + &
-  !                                        (2.*w0(i,j,k+1))           / dy       )**2  + &
-
-  !                                      -((v0(i,j,k)-v0(i,j,k-1))    / dzh(k)         + &
-  !                                        (w0(i,j,k)-w0(i,j-1,k))    / dy       )**2  + &
-  !                                      +((v0(i,j,k)-v0(i,j,k-1))    / dzh(k)         + &
-  !                                        (2.*w0(i,j,k))             / dy       )**2    &
-  !                                   )
-  !     elseif(.not. (e12p(i,j-1,k)==0)) then
-  !       e12p(i,j-1,k) = e12p(i,j-1,k) + (ekm(i,j,k)+ekm(i,j-1,k))*(e120(i,j,k)-e120(i,j-1,k))*dy2i &
-  !                                 + ekm(i,j-1,k)/(2.*e120(i,j-1,k))* (&  !source terms
-  !                                      -((u0(i,j,k)-u0(i,j-1,k))    / dy             + &
-  !                                        (v0(i,j,k)-v0(i-1,j,k))    / dx       )**2  + &
-  !                                      +((-2.*u0(i,j-1,k))          / dy             + &
-  !                                        (v0(i,j,k)-v0(i-1,j,k))    / dx       )**2  + &
-
-  !                                      -((u0(i+1,j,k)-u0(i+1,j-1,k))/ dy             + &
-  !                                        (v0(i+1,j,k)-v0(i,j,k))    / dx       )**2  + &
-  !                                      +((-2.*u0(i+1,j-1,k))        / dy             + &
-  !                                        (v0(i+1,j,k)-v0(i,j,k))    / dx       )**2  + &
-
-  !                                      -((v0(i,j,k)-v0(i,j,k-1))    / dzh(k)         + &
-  !                                        (w0(i,j,k)-w0(i,j-1,k))    / dy       )**2  + &
-  !                                      +((v0(i,j,k)-v0(i,j,k-1))    / dzh(k)         + &
-  !                                        (-2.*w0(i,j-1,k))          / dy       )**2  + &
-
-  !                                      -((v0(i,j,k+1)-v0(i,j,k))    / dzh(k+1)       + &
-  !                                        (w0(i,j,k+1)-w0(i,j-1,k+1))/ dy       )**2  + &
-  !                                      +((v0(i,j,k+1)-v0(i,j,k))    / dzh(k+1)       + &
-  !                                        (-2.*w0(i,j-1,k+1))        / dy       )**2    &
-  !                                   )
-  !     end if
-  !   else !Special treatment for the lowest full level: k=1
-  !     if(.not. (e12p(i,j,k)==0)) then
-  !       e12p(i,j,k)   = e12p(i,j,k)   - (ekm(i,j,k)+ekm(i,j-1,k))*(e120(i,j,k)-e120(i,j-1,k))*dy2i &
-  !                                 + ekm(i,j,k)/(2.*e120(i,j,k))* (&  !source terms
-  !                                      -((u0(i,j,k)-u0(i,j-1,k))    / dy             + &
-  !                                        (v0(i,j,k)-v0(i-1,j,k))    / dx       )**2  + &
-  !                                      +((2.*u0(i,j,k))             / dy             + &
-  !                                        (v0(i,j,k)-v0(i-1,j,k))    / dx       )**2  + &
-
-  !                                      -((u0(i+1,j,k)-u0(i+1,j-1,k))/ dy             + &
-  !                                        (v0(i+1,j,k)-v0(i,j,k))    / dx       )**2  + &
-  !                                      +((2.*u0(i+1,j,k))           / dy             + &
-  !                                        (v0(i+1,j,k)-v0(i,j,k))    / dx       )**2    &
-  !                                   )
-
-  !     elseif(.not. (e12p(i,j-1,k)==0)) then
-  !       e12p(i,j-1,k) = e12p(i,j-1,k) + (ekm(i,j,k)+ekm(i,j-1,k))*(e120(i,j,k)-e120(i,j-1,k))*dy2i &
-  !                                 + ekm(i,j-1,k)/(2.*e120(i,j-1,k))* (&  !source terms
-  !                                      -((u0(i,j,k)-u0(i,j-1,k))    / dy             + &
-  !                                        (v0(i,j,k)-v0(i-1,j,k))    / dx       )**2  + &
-  !                                      +((-2.*u0(i,j-1,k))          / dy             + &
-  !                                        (v0(i,j,k)-v0(i-1,j,k))    / dx       )**2  + &
-
-  !                                      -((u0(i+1,j,k)-u0(i+1,j-1,k))/ dy             + &
-  !                                        (v0(i+1,j,k)-v0(i,j,k))    / dx       )**2  + &
-  !                                      +((-2.*u0(i+1,j-1,k))        / dy             + &
-  !                                        (v0(i+1,j,k)-v0(i,j,k))    / dx       )**2    &
-  !                                   )
-  !     end if
-  !   end if
-  ! end subroutine ywalle12
 
 end module modibm
